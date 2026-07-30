@@ -120,7 +120,7 @@
                     }
 
                     .name {
-                        @apply text-xl font-serif font-bold text-black tracking-tight;
+                        @apply text-xl font-serif font-bold text-black tracking-tight -mt-1;
                     }
                 }
 
