@@ -11,7 +11,9 @@ import {
 } from "../lib/constants";
 
 interface UploadProps {
-  onComplete?: (base64Data: string) => void;
+  onComplete?: (
+    base64Data: string
+  ) => Promise<{ success: boolean; error?: string } | boolean | void> | void;
 }
 
 const convertSvgToPng = (svgDataUrl: string): Promise<string> => {
@@ -63,9 +65,20 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      timeoutRef.current = setTimeout(() => {
-        if (base64DataRef.current) {
-          onComplete?.(base64DataRef.current);
+      timeoutRef.current = setTimeout(async () => {
+        if (base64DataRef.current && onComplete) {
+          try {
+            const result = await onComplete(base64DataRef.current);
+            if (result && typeof result === "object" && !result.success) {
+              setFile(null);
+              setProgress(0);
+              setError(result.error || "Server validation failed. Please try uploading again.");
+            }
+          } catch (err: any) {
+            setFile(null);
+            setProgress(0);
+            setError("An error occurred during upload validation.");
+          }
         }
       }, REDIRECT_DELAY_MS);
     }
@@ -110,6 +123,10 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
           base64Data = await convertSvgToPng(base64Data);
         } catch (err) {
           console.error("Failed to rasterize SVG for AI processing:", err);
+          setFile(null);
+          setProgress(0);
+          setError("Failed to process SVG file. Please upload a valid vector floor plan.");
+          return;
         }
       }
 
