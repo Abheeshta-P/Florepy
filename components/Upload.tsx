@@ -1,7 +1,10 @@
 import { CheckCircle2, ImageIcon, UploadIcon } from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router";
 import {
+  ALLOWED_FILE_EXTENSIONS,
+  ALLOWED_IMAGE_TYPES,
+  MAX_FILE_SIZE_BYTES,
   PROGRESS_INCREMENT,
   PROGRESS_INTERVAL_MS,
   REDIRECT_DELAY_MS,
@@ -44,11 +47,52 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const { isSignedIn } = useOutletContext<AuthContext>();
 
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completedRef = useRef(false);
+  const base64DataRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (progress >= 100 && !completedRef.current) {
+      completedRef.current = true;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      timeoutRef.current = setTimeout(() => {
+        if (base64DataRef.current) {
+          onComplete?.(base64DataRef.current);
+        }
+      }, REDIRECT_DELAY_MS);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [progress, onComplete]);
+
   const processFile = (selectedFile: File | null | undefined) => {
     if (!isSignedIn || !selectedFile) return;
+    const isValidType =
+      ALLOWED_IMAGE_TYPES.includes(selectedFile.type) ||
+      ALLOWED_FILE_EXTENSIONS.some((ext) => selectedFile.name.toLowerCase().endsWith(ext));
+    if (!isValidType) {
+      setError("Unsupported file format. Please upload a JPG, PNG, WEBP, or SVG file.");
+      return;
+    }
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setError("File size exceeds the 10MB limit. Please upload a smaller file.");
+      return;
+    }
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    completedRef.current = false;
+    base64DataRef.current = null;
+    setError(null);
     setFile(selectedFile);
     setProgress(0);
 
@@ -69,19 +113,17 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
         }
       }
 
-      const interval = setInterval(() => {
-        setProgress((prev) => {
-          const next = prev + PROGRESS_INCREMENT;
-          if (next >= 100) {
-            clearInterval(interval);
-            setTimeout(() => {
-              onComplete?.(base64Data);
-            }, REDIRECT_DELAY_MS);
-            return 100;
-          }
-          return next;
-        });
+      base64DataRef.current = base64Data;
+      intervalRef.current = setInterval(() => {
+        setProgress((prev) => (prev + PROGRESS_INCREMENT >= 100 ? 100 : prev + PROGRESS_INCREMENT));
       }, PROGRESS_INTERVAL_MS);
+    };
+    reader.onerror = () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setFile(null);
+      setProgress(0);
+      setError("Failed to read the selected file. Please try uploading again.");
     };
     reader.readAsDataURL(selectedFile);
   };
@@ -106,11 +148,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
     if (!isSignedIn) return;
 
     const droppedFile = e.dataTransfer.files?.[0];
-    if (
-      droppedFile &&
-      (droppedFile.type.startsWith('image/') ||
-        droppedFile.name.toLowerCase().endsWith('.svg'))
-    ) {
+    if (droppedFile) {
       processFile(droppedFile);
     }
   };
@@ -148,6 +186,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
               {isSignedIn ? ("Click to upload or just drag and drop") : ("Signin or Signup with puter to upload")}
             </p>
             <p className="help">Supports JPG, PNG & SVG up to 10MB.</p>
+            {error && <p className="text-red-500 text-xs font-semibold mt-2">{error}</p>}
           </div>
         </div>) : (
           <div className="upload-status">
