@@ -4,6 +4,7 @@ import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
 import { useNavigate } from "react-router";
+import { validateServerUploadBoundary } from "../../lib/constants";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -52,10 +53,15 @@ export default function Home() {
   const navigate = useNavigate();
 
   const handleUploadComplete = async (base64Image: string) => {
+    const validation = await validateServerUploadBoundary(base64Image);
+    if (!validation.valid) {
+      console.error("Upload rejected at server validation boundary:", validation.error);
+      return false;
+    }
     const newId = Date.now().toString();
-    navigate(`/visualizer/${newId}`)
+    navigate(`/visualizer/${newId}`);
     return true;
-  }
+  };
   return (
     <div className="home">
       <NavBar />

@@ -31,6 +31,52 @@ export const ALLOWED_FILE_EXTENSIONS = [
   ".svg",
 ];
 
+export interface UploadValidationResult {
+  valid: boolean;
+  error?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}
+
+export const validateServerUploadBoundary = async (
+  dataUrl: string
+): Promise<UploadValidationResult> => {
+  if (!dataUrl || !dataUrl.startsWith("data:")) {
+    return { valid: false, error: "Invalid Data URL provided to upload boundary." };
+  }
+
+  const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (!match || match.length < 3) {
+    return { valid: false, error: "Malformed Base64 Data URL format." };
+  }
+
+  const mimeType = match[1].toLowerCase();
+  const base64Payload = match[2];
+
+  const isValidType =
+    ALLOWED_IMAGE_TYPES.includes(mimeType) ||
+    ALLOWED_FILE_EXTENSIONS.some((ext) => mimeType.includes(ext.replace(".", "")));
+
+  if (!isValidType) {
+    return {
+      valid: false,
+      error: `Unsupported format (${mimeType}) rejected at server boundary. Allowed types: JPG, PNG, WEBP, SVG.`,
+    };
+  }
+
+  const padding = base64Payload.endsWith("==") ? 2 : base64Payload.endsWith("=") ? 1 : 0;
+  const sizeBytes = Math.floor((base64Payload.length * 3) / 4) - padding;
+
+  if (sizeBytes > MAX_FILE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `Decoded file size (${(sizeBytes / (1024 * 1024)).toFixed(2)}MB) exceeds limit of 10MB.`,
+    };
+  }
+
+  return { valid: true, mimeType, sizeBytes };
+};
+
 // UI Constants
 export const GRID_OVERLAY_SIZE = "60px 60px";
 export const GRID_COLOR = "#3B82F6";

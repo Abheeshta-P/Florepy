@@ -110,6 +110,10 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
           base64Data = await convertSvgToPng(base64Data);
         } catch (err) {
           console.error("Failed to rasterize SVG for AI processing:", err);
+          setFile(null);
+          setProgress(0);
+          setError("Failed to process SVG file. Please upload a valid vector floor plan.");
+          return;
         }
       }
 
