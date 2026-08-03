@@ -53,9 +53,7 @@ export const validateServerUploadBoundary = async (
   const mimeType = match[1].toLowerCase();
   const base64Payload = match[2];
 
-  const isValidType =
-    ALLOWED_IMAGE_TYPES.includes(mimeType) ||
-    ALLOWED_FILE_EXTENSIONS.some((ext) => mimeType.includes(ext.replace(".", "")));
+  const isValidType = ALLOWED_IMAGE_TYPES.includes(mimeType);
 
   if (!isValidType) {
     return {
@@ -63,6 +61,15 @@ export const validateServerUploadBoundary = async (
       error: `Unsupported format (${mimeType}) rejected at server boundary. Allowed types: JPG, PNG, WEBP, SVG.`,
     };
   }
+
+    const isBase64 =
+      base64Payload.length > 0 &&
+      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+        base64Payload,
+      );
+    if (!isBase64) {
+      return { valid: false, error: "Malformed Base64 payload." };
+    }
 
   const padding = base64Payload.endsWith("==") ? 2 : base64Payload.endsWith("=") ? 1 : 0;
   const sizeBytes = Math.floor((base64Payload.length * 3) / 4) - padding;

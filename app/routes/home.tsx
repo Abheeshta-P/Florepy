@@ -56,11 +56,11 @@ export default function Home() {
     const validation = await validateServerUploadBoundary(base64Image);
     if (!validation.valid) {
       console.error("Upload rejected at server validation boundary:", validation.error);
-      return false;
+      return { success: false, error: validation.error };
     }
     const newId = Date.now().toString();
     navigate(`/visualizer/${newId}`);
-    return true;
+    return { success: true };
   };
   return (
     <div className="home">
