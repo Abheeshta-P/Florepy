@@ -1,10 +1,12 @@
-import { ArrowRight, Clock, Layers } from "lucide-react";
+import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
 import NavBar from "../../components/NavBar";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
 import { useNavigate } from "react-router";
 import { validateServerUploadBoundary } from "../../lib/constants";
+import { useState } from "react";
+import { createProject } from "../../lib/puter.action";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -51,6 +53,7 @@ export function meta({}: Route.MetaArgs) {
 
 export default function Home() {
   const navigate = useNavigate();
+  const [projects,setProjects] = useState<DesignItem[]>([])
 
   const handleUploadComplete = async (base64Image: string) => {
     const validation = await validateServerUploadBoundary(base64Image);
@@ -59,7 +62,31 @@ export default function Home() {
       return { success: false, error: validation.error };
     }
     const newId = Date.now().toString();
-    navigate(`/visualizer/${newId}`);
+    const name = `Residence ${newId}`;
+
+    // project
+    const newItem = {
+      id:newId, name, sourceImage:base64Image,
+      renderedImage: undefined,
+      timestamp:Date.now()
+    }
+
+    const saved = await createProject({item:newItem, visibility:"private"});
+
+    if(!saved){
+      console.error("Failed to create project")
+      return false;
+    }
+
+    setProjects((prev)=>[saved, ...prev])
+    navigate(`/visualizer/${newId}`,{
+      state: {
+        intialImage: saved.sourceImage,
+        intialRendered: saved.renderedImage || null,
+        name
+      }
+    });
+
     return { success: true };
   };
   return (
@@ -87,7 +114,7 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="upload-shell">
+        <div className="upload-shell" id="upload">
           <div className="grid-overlay" />
           <div className="upload-card">
             <div className="upload-head">
@@ -113,33 +140,59 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <div className="projects-grid">
-            <div className="project-card group">
-              <div className="preview">
-                <img
-                  src="https://roomify-mlhuk267-dfwu1i.puter.site/projects/1770803585402/rendered.png"
-                  alt="Project"
-                />
-
-                <div className="badge">
-                  <span>Community</span>
-                </div>
-              </div>
-              <div className="card-body">
-                <div>
-                  <h3>Project Manhatann</h3>
-                  <div className="meta">
-                    <Clock size={12} />
-                    <span>{new Date("08.25.2026").toLocaleDateString()}</span>
-                    <span>By SS</span>
+          {projects.length > 0 ? (
+            <div className="projects-grid">
+              {projects.map(({ id, name, renderedImage, sourceImage, timestamp }) => (
+                <button
+                  type="button"
+                  className="project-card group text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  key={id}
+                  onClick={() =>
+                    navigate(`/visualizer/${id}`, {
+                      state: {
+                        intialImage: sourceImage,
+                        intialRendered: renderedImage || null,
+                        name,
+                      },
+                    })
+                  }
+                >
+                  <div className="preview">
+                    <img src={renderedImage || sourceImage} alt={name || "Project"} />
+                    <div className="badge">
+                      <span>Community</span>
+                    </div>
                   </div>
-                </div>
-                <div className="arrow">
-                  <ArrowRight size={18}/>
-                </div>
-              </div>
+                  <div className="card-body">
+                    <div>
+                      <h3>{name}</h3>
+                      <div className="meta">
+                        <Clock size={12} />
+                        <span>{new Date(timestamp).toLocaleDateString()}</span>
+                        <span>By SS</span>
+                      </div>
+                    </div>
+                    <div className="arrow">
+                      <ArrowRight size={18} />
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="empty-projects-state">
+              <div className="empty-icon-wrap">
+                <FolderPlus className="empty-icon" size={26} />
+              </div>
+              <h3>No projects created yet</h3>
+              <p>
+                Upload your first 2D floor plan above to start generating 3D architectural visualizations.
+              </p>
+              <a href="#upload" className="empty-cta">
+                Upload Floor Plan <ArrowRight size={14} className="icon" />
+              </a>
+            </div>
+          )}
         </div>
       </section>
     </div>

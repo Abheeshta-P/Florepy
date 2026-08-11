@@ -1,3 +1,5 @@
+import { dataUrlToBlob } from "./utils";
+
 export const PUTER_WORKER_URL = import.meta.env.VITE_PUTER_WORKER_URL || "";
 
 // Storage Paths
@@ -41,17 +43,17 @@ export interface UploadValidationResult {
 export const validateServerUploadBoundary = async (
   dataUrl: string
 ): Promise<UploadValidationResult> => {
-  if (!dataUrl || !dataUrl.startsWith("data:")) {
-    return { valid: false, error: "Invalid Data URL provided to upload boundary." };
+  if (!dataUrl || !dataUrl.startsWith("data:") || !dataUrl.includes(";base64")) {
+    return { valid: false, error: "Invalid Base64 Data URL provided to upload boundary." };
   }
 
-  const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
-  if (!match || match.length < 3) {
-    return { valid: false, error: "Malformed Base64 Data URL format." };
+  const converted = dataUrlToBlob(dataUrl);
+  if (!converted || converted.blob.size === 0) {
+    return { valid: false, error: "Malformed or empty Base64 Data URL format." };
   }
 
-  const mimeType = match[1].toLowerCase();
-  const base64Payload = match[2];
+  const mimeType = converted.contentType.toLowerCase();
+  const sizeBytes = converted.blob.size;
 
   const isValidType = ALLOWED_IMAGE_TYPES.includes(mimeType);
 
@@ -61,18 +63,6 @@ export const validateServerUploadBoundary = async (
       error: `Unsupported format (${mimeType}) rejected at server boundary. Allowed types: JPG, PNG, WEBP, SVG.`,
     };
   }
-
-    const isBase64 =
-      base64Payload.length > 0 &&
-      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-        base64Payload,
-      );
-    if (!isBase64) {
-      return { valid: false, error: "Malformed Base64 payload." };
-    }
-
-  const padding = base64Payload.endsWith("==") ? 2 : base64Payload.endsWith("=") ? 1 : 0;
-  const sizeBytes = Math.floor((base64Payload.length * 3) / 4) - padding;
 
   if (sizeBytes > MAX_FILE_SIZE_BYTES) {
     return {

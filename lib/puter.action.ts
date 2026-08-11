@@ -1,4 +1,6 @@
 import puter from "@heyputer/puter.js";
+import { getOrCreateHostingConfig, uploadImageToHosting } from "./puter.hosting";
+import { isHostedUrl } from "./utils";
 
 export const signIn = async () => await puter.auth.signIn();
 
@@ -10,4 +12,55 @@ export const getCurrentUser = async () => {
   } catch {
     return null;
   }
-}
+};
+
+// create project and create kv
+export const createProject = async ({ item, visibility }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
+  const projectId = item.id;
+
+  //  get where to host
+  const hosting = visibility === "private" ? null : await getOrCreateHostingConfig();
+
+  // host
+  const hostedSource = projectId ? await uploadImageToHosting({
+    hosting, url: item.sourceImage,
+    projectId, label: "source",
+    visibility
+  }) : null;
+
+  const hostedRender = projectId && item.renderedImage ? await uploadImageToHosting({
+    hosting, url: item.renderedImage,
+    projectId, label: "rendered",
+    visibility
+  }) : null;
+
+  const resolvedSource = hostedSource?.url || (isHostedUrl(item.sourceImage) ? item.sourceImage : '')
+
+  if (!resolvedSource) {
+    console.warn("Failed to host source image, skipping save.")
+    return null;
+  }
+
+  const resolvedRender = hostedRender?.url || ((item.renderedImage && isHostedUrl(item.renderedImage)) ? item.renderedImage : undefined);
+
+  const {
+    sourcePath: _sourcePath,
+    renderedPath: _renderedPath,
+    publicPath: _publicPath,
+    ...rest
+  } = item;
+
+  const payload = {
+    ...rest,
+    sourceImage: resolvedSource,
+    renderedImage: resolvedRender
+  }
+
+  try {
+    // call puter worker to store the project in kv
+    return payload;
+  } catch (error) {
+    console.error("Failed to save project", error)
+    return null;
+  }
+};
