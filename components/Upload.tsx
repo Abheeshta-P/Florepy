@@ -16,34 +16,7 @@ interface UploadProps {
   ) => Promise<{ success: boolean; error?: string } | boolean | void> | void;
 }
 
-const convertSvgToPng = (svgDataUrl: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      // Provide high-definition fallback sizing if intrinsic coordinates are missing
-      const width = img.width || 1024;
-      const height = img.height || 1024;
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Canvas 2d context not available"));
-        return;
-      }
-      // Fill a crisp white backdrop so transparent SVG floor plans do not turn black when processed by AI models
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
-
-      resolve(canvas.toDataURL("image/png"));
-    };
-    img.onerror = (err) => reject(err);
-    img.src = svgDataUrl;
-  });
-};
+import { imageUrlToPngBlob } from "../lib/utils";
 
 const Upload: React.FC<UploadProps> = ({ onComplete }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -120,7 +93,14 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
         selectedFile.name.toLowerCase().endsWith(".svg")
       ) {
         try {
-          base64Data = await convertSvgToPng(base64Data);
+          const blob = await imageUrlToPngBlob(base64Data);
+          if (!blob) throw new Error("Conversion returned null");
+          base64Data = await new Promise<string>((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result as string);
+            fr.onerror = reject;
+            fr.readAsDataURL(blob);
+          });
         } catch (err) {
           console.error("Failed to rasterize SVG for AI processing:", err);
           setFile(null);

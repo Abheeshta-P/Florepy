@@ -108,6 +108,9 @@ export const imageUrlToPngBlob = async (url: string): Promise<Blob | null> => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
+    // Fill a crisp white backdrop so transparent SVG floor plans do not turn black when processed by AI models
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
     ctx.drawImage(loaded, 0, 0, width, height);
 
     return await new Promise<Blob | null>((resolve) => {
