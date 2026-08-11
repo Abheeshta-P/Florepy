@@ -43,13 +43,13 @@ export interface UploadValidationResult {
 export const validateServerUploadBoundary = async (
   dataUrl: string
 ): Promise<UploadValidationResult> => {
-  if (!dataUrl || !dataUrl.startsWith("data:")) {
-    return { valid: false, error: "Invalid Data URL provided to upload boundary." };
+  if (!dataUrl || !dataUrl.startsWith("data:") || !dataUrl.includes(";base64")) {
+    return { valid: false, error: "Invalid Base64 Data URL provided to upload boundary." };
   }
 
   const converted = dataUrlToBlob(dataUrl);
-  if (!converted) {
-    return { valid: false, error: "Malformed Base64 Data URL format." };
+  if (!converted || converted.blob.size === 0) {
+    return { valid: false, error: "Malformed or empty Base64 Data URL format." };
   }
 
   const mimeType = converted.contentType.toLowerCase();
