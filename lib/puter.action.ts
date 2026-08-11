@@ -15,21 +15,23 @@ export const getCurrentUser = async () => {
 };
 
 // create project and create kv
-export const createProject = async ({ item }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
+export const createProject = async ({ item, visibility }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
   const projectId = item.id;
 
   //  get where to host
-  const hosting = await getOrCreateHostingConfig();
+  const hosting = visibility === "private" ? null : await getOrCreateHostingConfig();
 
   // host
   const hostedSource = projectId ? await uploadImageToHosting({
     hosting, url: item.sourceImage,
-    projectId, label: "source"
+    projectId, label: "source",
+    visibility
   }) : null;
 
   const hostedRender = projectId && item.renderedImage ? await uploadImageToHosting({
     hosting, url: item.renderedImage,
-    projectId, label: "rendered"
+    projectId, label: "rendered",
+    visibility
   }) : null;
 
   const resolvedSource = hostedSource?.url || (isHostedUrl(item.sourceImage) ? item.sourceImage : '')

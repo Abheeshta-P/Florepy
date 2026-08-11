@@ -114,6 +114,7 @@ interface StoreHostedImageParams {
   url: string;
   projectId: string;
   label: "source" | "rendered";
+  visibility?: "private" | "public";
 }
 
 interface CreateProjectParams {

@@ -15,14 +15,20 @@ type HostedAsset = { url: string };
 
 export const getOrCreateHostingConfig =
   async (): Promise<HostingConfig | null> => {
-    const existing = (await puter.kv.get(
-      HOSTING_CONFIG_KEY,
-    )) as HostingConfig | null;
-    if (existing?.subdomain) return { subdomain: existing.subdomain };
-
-    const subdomain = createHostingSlug();
-
     try {
+      const existing = (await puter.kv.get(
+        HOSTING_CONFIG_KEY,
+      )) as HostingConfig | null;
+      if (existing?.subdomain) return { subdomain: existing.subdomain };
+
+      const subdomain = createHostingSlug();
+      
+      const hasPerms = await puter.perms.requestManageSubdomains();
+      if (!hasPerms) {
+        console.warn("Manage subdomains permission denied by user.");
+        return null;
+      }
+      
       const created = await puter.hosting.create(subdomain, ".");
 
       const record: HostingConfig = { subdomain: created.subdomain };
@@ -40,8 +46,10 @@ export const uploadImageToHosting = async ({
   url,
   projectId,
   label,
+  visibility,
 }: StoreHostedImageParams): Promise<HostedAsset | null> => {
-  if (!hosting || !url) return null;
+  if (!url) return null;
+  if (visibility !== "private" && !hosting) return null;
 
   if (isHostedUrl(url)) return { url };
 
@@ -66,6 +74,10 @@ export const uploadImageToHosting = async ({
 
     await puter.fs.mkdir(dir, { createMissingParents: true });
     await puter.fs.write(filePath, uploadFile);
+
+    if (visibility === "private" || !hosting) {
+      return { url: filePath };
+    }
 
     const hostedUrl = getHostedUrl({ subdomain: hosting.subdomain }, filePath);
 

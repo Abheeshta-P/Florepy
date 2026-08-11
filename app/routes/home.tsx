@@ -143,8 +143,9 @@ export default function Home() {
           {projects.length > 0 ? (
             <div className="projects-grid">
               {projects.map(({ id, name, renderedImage, sourceImage, timestamp }) => (
-                <div
-                  className="project-card group"
+                <button
+                  type="button"
+                  className="project-card group text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   key={id}
                   onClick={() =>
                     navigate(`/visualizer/${id}`, {
@@ -175,7 +176,7 @@ export default function Home() {
                       <ArrowRight size={18} />
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
