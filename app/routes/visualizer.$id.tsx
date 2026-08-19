@@ -4,6 +4,11 @@ import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import { Download, RefreshCcw, Share2, X } from "lucide-react";
 import { createProject, getProjectById } from "../../lib/puter.action";
+import {
+  ReactCompareSlider,
+  ReactCompareSliderImage,
+} from "react-compare-slider";
+import { fetchBlobFromUrl, getImageExtension } from "../../lib/utils";
 
 function VisualizerId() {
   // which user which id
@@ -22,6 +27,33 @@ function VisualizerId() {
   const [isProjectLoading, setIsProjectLoading] = useState(true);
 
   const handleBack = () => navigate("/");
+
+  const handleExport = async () => {
+    if (!currentImage) return;
+
+    try {
+      const data = await fetchBlobFromUrl(currentImage);
+      if (!data) throw new Error("Failed to fetch image blob");
+
+      const ext = getImageExtension(data.contentType, currentImage) || "png";
+      const blobUrl = URL.createObjectURL(data.blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `florepy-${project?.name || `Residence-${id || "render"}`}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Failed to export image:", error);
+      const link = document.createElement("a");
+      link.href = currentImage;
+      link.download = `${project?.name || `Residence-${id || "render"}`}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   const runGeneration = async (item: DesignItem) => {
     if (!id || !item.sourceImage) return;
@@ -129,7 +161,7 @@ function VisualizerId() {
             <div className="panel-actions">
               <Button
                 size="sm"
-                onClick={() => {}}
+                onClick={handleExport}
                 className="export"
                 disabled={!currentImage}
               >
@@ -169,6 +201,49 @@ function VisualizerId() {
                     Generating your 3D visualization...
                   </span>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel compare">
+          <div className="panel-header">
+            <div className="panel-meta">
+              <p>Comparison</p>
+              <h3>Before and After</h3>
+            </div>
+            <div className="hint">Drag to compare</div>
+          </div>
+
+          <div className="compare-stage">
+            {project?.sourceImage && currentImage ? (
+              <ReactCompareSlider
+                defaultValue={50}
+                style={{ width: "100%", height: "auto" }}
+                itemOne={
+                  <ReactCompareSliderImage
+                    src={project?.sourceImage}
+                    alt="before"
+                    className="compare-img"
+                  />
+                }
+                itemTwo={
+                  <ReactCompareSliderImage
+                    src={currentImage || ""}
+                    alt="after"
+                    className="compare-img"
+                  />
+                }
+              />
+            ) : (
+              <div className="compare-fallback">
+                {project?.sourceImage && (
+                  <img
+                    src={project.sourceImage}
+                    alt="Before"
+                    className="compare-img"
+                  />
+                )}
               </div>
             )}
           </div>
