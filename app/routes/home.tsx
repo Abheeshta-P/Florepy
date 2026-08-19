@@ -5,8 +5,8 @@ import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
 import { useNavigate } from "react-router";
 import { validateServerUploadBoundary } from "../../lib/constants";
-import { useState } from "react";
-import { createProject } from "../../lib/puter.action";
+import { useEffect, useRef, useState } from "react";
+import { createProject, getProjects } from "../../lib/puter.action";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -53,42 +53,69 @@ export function meta({}: Route.MetaArgs) {
 
 export default function Home() {
   const navigate = useNavigate();
-  const [projects,setProjects] = useState<DesignItem[]>([])
+  const [projects, setProjects] = useState<DesignItem[]>([]);
+  const isCreatingProjectRef = useRef(false);
 
   const handleUploadComplete = async (base64Image: string) => {
-    const validation = await validateServerUploadBoundary(base64Image);
-    if (!validation.valid) {
-      console.error("Upload rejected at server validation boundary:", validation.error);
-      return { success: false, error: validation.error };
-    }
-    const newId = Date.now().toString();
-    const name = `Residence ${newId}`;
+    try {
+      if (isCreatingProjectRef.current) return false;
+      isCreatingProjectRef.current = true;
 
-    // project
-    const newItem = {
-      id:newId, name, sourceImage:base64Image,
-      renderedImage: undefined,
-      timestamp:Date.now()
-    }
-
-    const saved = await createProject({item:newItem, visibility:"private"});
-
-    if(!saved){
-      console.error("Failed to create project")
-      return false;
-    }
-
-    setProjects((prev)=>[saved, ...prev])
-    navigate(`/visualizer/${newId}`,{
-      state: {
-        intialImage: saved.sourceImage,
-        intialRendered: saved.renderedImage || null,
-        name
+      const validation = await validateServerUploadBoundary(base64Image);
+      if (!validation.valid) {
+        console.error(
+          "Upload rejected at server validation boundary:",
+          validation.error,
+        );
+        return { success: false, error: validation.error };
       }
-    });
+      const newId = Date.now().toString();
+      const name = `Residence ${newId}`;
 
-    return { success: true };
+      // project
+      const newItem = {
+        id: newId,
+        name,
+        sourceImage: base64Image,
+        renderedImage: undefined,
+        timestamp: Date.now(),
+      };
+
+      const saved = await createProject({
+        item: newItem,
+        visibility: "private",
+      });
+
+      if (!saved) {
+        console.error("Failed to create project");
+        return false;
+      }
+
+      setProjects((prev) => [saved, ...prev]);
+      navigate(`/visualizer/${newId}`, {
+        state: {
+          intialImage: saved.sourceImage,
+          intialRendered: saved.renderedImage || null,
+          name,
+        },
+      });
+
+      return true;
+    } finally {
+      isCreatingProjectRef.current = false;
+    }
   };
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      const items = await getProjects();
+
+      setProjects(items);
+    };
+
+    fetchProjects();
+  }, []);
+
   return (
     <div className="home">
       <NavBar />
@@ -124,7 +151,7 @@ export default function Home() {
               <h3>Upload your floor plan</h3>
               <p>Supports JPG, PNG, and SVG vector formats up to 10MB</p>
             </div>
-            <Upload onComplete={handleUploadComplete}/>
+            <Upload onComplete={handleUploadComplete} />
           </div>
         </div>
       </section>
@@ -142,42 +169,40 @@ export default function Home() {
           </div>
           {projects.length > 0 ? (
             <div className="projects-grid">
-              {projects.map(({ id, name, renderedImage, sourceImage, timestamp }) => (
-                <button
-                  type="button"
-                  className="project-card group text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  key={id}
-                  onClick={() =>
-                    navigate(`/visualizer/${id}`, {
-                      state: {
-                        intialImage: sourceImage,
-                        intialRendered: renderedImage || null,
-                        name,
-                      },
-                    })
-                  }
-                >
-                  <div className="preview">
-                    <img src={renderedImage || sourceImage} alt={name || "Project"} />
-                    <div className="badge">
-                      <span>Community</span>
-                    </div>
-                  </div>
-                  <div className="card-body">
-                    <div>
-                      <h3>{name}</h3>
-                      <div className="meta">
-                        <Clock size={12} />
-                        <span>{new Date(timestamp).toLocaleDateString()}</span>
-                        <span>By SS</span>
+              {projects.map(
+                ({ id, name, renderedImage, sourceImage, timestamp }) => (
+                  <div
+                    className="project-card group"
+                    key={id}
+                    onClick={() => navigate(`/visualizer/${id}`)}
+                  >
+                    <div className="preview">
+                      <img
+                        src={renderedImage || sourceImage}
+                        alt={name || "Project"}
+                      />
+                      <div className="badge">
+                        <span>Community</span>
                       </div>
                     </div>
-                    <div className="arrow">
-                      <ArrowRight size={18} />
+                    <div className="card-body">
+                      <div>
+                        <h3>{name}</h3>
+                        <div className="meta">
+                          <Clock size={12} />
+                          <span>
+                            {new Date(timestamp).toLocaleDateString()}
+                          </span>
+                          <span>By SS</span>
+                        </div>
+                      </div>
+                      <div className="arrow">
+                        <ArrowRight size={18} />
+                      </div>
                     </div>
                   </div>
-                </button>
-              ))}
+                ),
+              )}
             </div>
           ) : (
             <div className="empty-projects-state">
@@ -186,7 +211,8 @@ export default function Home() {
               </div>
               <h3>No projects created yet</h3>
               <p>
-                Upload your first 2D floor plan above to start generating 3D architectural visualizations.
+                Upload your first 2D floor plan above to start generating 3D
+                architectural visualizations.
               </p>
               <a href="#upload" className="empty-cta">
                 Upload Floor Plan <ArrowRight size={14} className="icon" />

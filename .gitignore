@@ -7,3 +7,4 @@
 /build/
 
 office-work.patch
+.env.local
