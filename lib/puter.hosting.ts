@@ -76,7 +76,7 @@ export const uploadImageToHosting = async ({
     await puter.fs.write(filePath, uploadFile);
 
     if (visibility === "private" || !hosting) {
-      const privateUrl = URL.createObjectURL(uploadFile);
+      const privateUrl = await puter.fs.getReadURL(filePath);
       return { url: privateUrl };
     }
 

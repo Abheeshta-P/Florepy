@@ -102,7 +102,24 @@ export default function App() {
   // get current user
   useEffect(() => {
     refreshAuth();
-  }, [])
+
+    let unsubscribe: (() => void) | undefined;
+    
+    // Puter restores sessions asynchronously. Listen for when auth state changes 
+    // to automatically log the user in without them needing to click anything.
+    if (typeof window !== "undefined") {
+      import("@heyputer/puter.js").then((module) => {
+        const puter = module.default;
+        unsubscribe = puter.onAuthStateChanged(() => {
+          refreshAuth();
+        });
+      });
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
   
   const signIn = async () => {
     await puterSignIn();

@@ -28,24 +28,30 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const completedRef = useRef(false);
   const base64DataRef = useRef<string | null>(null);
 
+  const onCompleteRef = useRef(onComplete);
   useEffect(() => {
-    if (progress >= 100 && !completedRef.current) {
-      completedRef.current = true;
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    if (progress >= 100) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      timeoutRef.current = setTimeout(async () => {
-        if (base64DataRef.current && onComplete) {
+      const timeoutId = setTimeout(async () => {
+        if (base64DataRef.current && onCompleteRef.current) {
           try {
-            const result = await onComplete(base64DataRef.current);
-            if (result && typeof result === "object" && !result.success) {
+            const result = await onCompleteRef.current(base64DataRef.current);
+            if (result === false || (result && typeof result === "object" && !result.success)) {
               setFile(null);
               setProgress(0);
-              setError(result.error || "Server validation failed. Please try uploading again.");
+              const errMsg = (result && typeof result === "object" && result.error) 
+                ? result.error 
+                : "Server validation failed or project creation failed. Please try uploading again.";
+              setError(errMsg);
             }
           } catch (err: any) {
             setFile(null);
@@ -54,12 +60,11 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
           }
         }
       }, REDIRECT_DELAY_MS);
+      timeoutRef.current = timeoutId;
+      
+      return () => clearTimeout(timeoutId);
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [progress, onComplete]);
+  }, [progress]);
 
   const processFile = (selectedFile: File | null | undefined) => {
     if (!isSignedIn || !selectedFile) return;
@@ -76,7 +81,6 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
     }
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    completedRef.current = false;
     base64DataRef.current = null;
     setError(null);
     setFile(selectedFile);
