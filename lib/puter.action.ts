@@ -33,7 +33,7 @@ export const createProject = async ({
   const projectId = item.id;
 
   //  get where to host
-  const hosting = await getOrCreateHostingConfig();
+  const hosting = visibility === "public" ? await getOrCreateHostingConfig() : null;
 
   // host
   const hostedSource = projectId
@@ -42,6 +42,7 @@ export const createProject = async ({
         url: item.sourceImage,
         projectId,
         label: "source",
+        visibility,
       })
     : null;
 
@@ -52,6 +53,7 @@ export const createProject = async ({
           url: item.renderedImage,
           projectId,
           label: "rendered",
+          visibility,
         })
       : null;
 
