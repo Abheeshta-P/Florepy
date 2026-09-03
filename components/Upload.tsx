@@ -1,4 +1,4 @@
-import { CheckCircle2, ImageIcon, UploadIcon } from "lucide-react";
+import { CheckCircle2, ImageIcon, UploadIcon, Loader2 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router";
 import {
@@ -24,6 +24,8 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const { isSignedIn } = useOutletContext<AuthContext>();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -43,11 +45,13 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
       }
       const timeoutId = setTimeout(async () => {
         if (base64DataRef.current && onCompleteRef.current) {
+          setIsProcessing(true);
           try {
             const result = await onCompleteRef.current(base64DataRef.current);
             if (result === false || (result && typeof result === "object" && !result.success)) {
               setFile(null);
               setProgress(0);
+              setIsProcessing(false);
               const errMsg = (result && typeof result === "object" && result.error) 
                 ? result.error 
                 : "Server validation failed or project creation failed. Please try uploading again.";
@@ -56,6 +60,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
           } catch (err: any) {
             setFile(null);
             setProgress(0);
+            setIsProcessing(false);
             setError("An error occurred during upload validation.");
           }
         }
@@ -85,6 +90,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
     setError(null);
     setFile(selectedFile);
     setProgress(0);
+    setIsProcessing(false);
 
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -193,14 +199,20 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
           <div className="upload-status">
             <div className="status-content">
               <div className="status-icon">
-                {progress === 100 ? (<CheckCircle2 className="check"/>) : (<ImageIcon className="image"/>)}
+                {isProcessing ? (
+                  <Loader2 className="animate-spin text-primary w-6 h-6" />
+                ) : progress === 100 ? (
+                  <CheckCircle2 className="check"/>
+                ) : (
+                  <ImageIcon className="image"/>
+                )}
               </div>
               <h3>{file.name}</h3>
               <div className="progress">
                 <div className="bar" style={{ width: `${progress}%` }} />
                 
                 <p className="status-text">
-                  {progress < 100 ? "Analyzing Floor Plan..." : "Redirecting..."}
+                  {isProcessing ? "Processing..." : progress < 100 ? "Analyzing Floor Plan..." : "Redirecting..."}
                 </p>
               </div>
             </div>
