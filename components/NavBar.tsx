@@ -1,9 +1,10 @@
-import { Link, useNavigate, useOutletContext } from "react-router";
+import { Link, useNavigate } from "react-router";
 import Button from "./ui/Button";
 import { User, LogOut } from "lucide-react";
+import { useAuth } from "./AuthProvider";
 
 function NavBar() {
-  const {isSignedIn, isAuthLoading, userName, signIn, signOut} = useOutletContext<AuthContext>()
+  const {isSignedIn, isAuthLoading, userName, signIn, signOut} = useAuth()
   const navigate = useNavigate();
 
   const handleAuthClick = async()=> {
@@ -37,13 +38,18 @@ function NavBar() {
             <a href="/#hero">Home</a>
             <a href="/#upload">Upload</a>
             <a href="/#gallery">Community</a>
-            {isSignedIn && !isAuthLoading && <Link to="/dashboard">Dashboard</Link>}
+            {isAuthLoading ? (
+              <div className="w-20 h-4 bg-zinc-200 animate-pulse rounded mx-2"></div>
+            ) : isSignedIn ? (
+              <Link to="/dashboard">Dashboard</Link>
+            ) : null}
           </ul>
         </div>
         <div className="actions">
           {isAuthLoading ? (
-            <div className="flex space-x-3 items-center">
+            <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-zinc-200 animate-pulse rounded-full"></div>
+              <div className="w-7 h-7 bg-zinc-200 animate-pulse rounded-md"></div>
             </div>
           ) : isSignedIn ? (
             <>

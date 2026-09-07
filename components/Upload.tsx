@@ -1,6 +1,6 @@
 import { CheckCircle2, ImageIcon, UploadIcon, Loader2 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
-import { useOutletContext } from "react-router";
+import { useAuth } from "./AuthProvider";
 import {
   ALLOWED_FILE_EXTENSIONS,
   ALLOWED_IMAGE_TYPES,
@@ -26,7 +26,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
 
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isSignedIn } = useOutletContext<AuthContext>();
+  const { isSignedIn } = useAuth();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
