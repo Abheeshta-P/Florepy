@@ -206,48 +206,50 @@ function VisualizerId() {
           </div>
         </div>
 
-        <div className="panel compare">
-          <div className="panel-header">
-            <div className="panel-meta">
-              <p>Comparison</p>
-              <h3>Before and After</h3>
-            </div>
-            <div className="hint">Drag to compare</div>
-          </div>
-
-          <div className="compare-stage">
-            {project?.sourceImage && currentImage ? (
-              <ReactCompareSlider
-                defaultValue={50}
-                style={{ width: "100%", height: "auto" }}
-                itemOne={
-                  <ReactCompareSliderImage
-                    src={project?.sourceImage}
-                    alt="before"
-                    className="compare-img"
-                  />
-                }
-                itemTwo={
-                  <ReactCompareSliderImage
-                    src={currentImage || ""}
-                    alt="after"
-                    className="compare-img"
-                  />
-                }
-              />
-            ) : (
-              <div className="compare-fallback">
-                {project?.sourceImage && (
-                  <img
-                    src={project.sourceImage}
-                    alt="Before"
-                    className="compare-img"
-                  />
-                )}
+        {!isProcessing && currentImage && (
+          <div className="panel compare">
+            <div className="panel-header">
+              <div className="panel-meta">
+                <p>Comparison</p>
+                <h3>Before and After</h3>
               </div>
-            )}
+              <div className="hint">Drag to compare</div>
+            </div>
+
+            <div className="compare-stage">
+              {project?.sourceImage && currentImage ? (
+                <ReactCompareSlider
+                  defaultValue={50}
+                  style={{ width: "100%", height: "auto" }}
+                  itemOne={
+                    <ReactCompareSliderImage
+                      src={project?.sourceImage}
+                      alt="before"
+                      className="compare-img"
+                    />
+                  }
+                  itemTwo={
+                    <ReactCompareSliderImage
+                      src={currentImage || ""}
+                      alt="after"
+                      className="compare-img"
+                    />
+                  }
+                />
+              ) : (
+                <div className="compare-fallback">
+                  {project?.sourceImage && (
+                    <img
+                      src={project.sourceImage}
+                      alt="Before"
+                      className="compare-img"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </section>
     </div>
   );
