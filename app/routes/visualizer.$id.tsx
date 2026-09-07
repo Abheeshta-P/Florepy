@@ -147,16 +147,6 @@ function VisualizerId() {
 
   return (
     <div className="visualizer">
-      <nav className="topbar">
-        <div className="brand">
-          <img src="/florepy.png" alt="Logo" width={35} height={35} />
-          <span className="name">Florepy</span>
-        </div>
-        <Button variant="ghost" size="sm" onClick={handleBack} className="exit">
-          <X className="icon" /> Exit Editor
-        </Button>
-      </nav>
-
       <section className="content">
         {isProjectLoading ? (
           <div className="panel animate-pulse">

@@ -1,5 +1,4 @@
 import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
-import NavBar from "../../components/NavBar";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
@@ -122,7 +121,6 @@ export default function Home() {
 
   return (
     <div className="home">
-      <NavBar />
       <section className="hero">
         <div className="announce">
           <div className="dot">

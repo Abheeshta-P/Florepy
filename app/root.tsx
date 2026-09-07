@@ -30,6 +30,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "manifest", href: "/site.webmanifest" },
 ];
 
+import NavBar from "../components/NavBar";
 import { AuthProvider } from "../components/AuthProvider";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <AuthProvider>
+          <NavBar />
           {children}
           <ScrollRestoration />
           <Scripts />
