@@ -54,6 +54,7 @@ export function meta({}: Route.MetaArgs) {
 export default function Home() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<DesignItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const isCreatingProjectRef = useRef(false);
 
   const handleUploadComplete = async (base64Image: string) => {
@@ -108,9 +109,12 @@ export default function Home() {
 
   useEffect(() => {
     const fetchProjects = async () => {
-      const items = await getProjects();
-
-      setProjects(items);
+      try {
+        const items = await getProjects();
+        setProjects(items);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchProjects();
@@ -162,12 +166,25 @@ export default function Home() {
             <div className="copy">
               <h2>Projects</h2>
               <p>
-                Your latest work and shared community projects, all in one
-                place.
+                Your latest architectural generations and floor plan uploads.
               </p>
             </div>
           </div>
-          {projects.length > 0 ? (
+          {isLoading ? (
+            <div className="projects-grid">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="project-card animate-pulse border border-zinc-100 bg-white shadow-sm overflow-hidden flex flex-col h-full">
+                  <div className="preview aspect-4/3 bg-zinc-200 w-full relative"></div>
+                  <div className="card-body p-4 flex justify-between items-end flex-grow border-t border-zinc-100">
+                    <div className="w-full">
+                      <div className="h-5 bg-zinc-200 rounded w-2/3 mb-3"></div>
+                      <div className="h-4 bg-zinc-200 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : projects.length > 0 ? (
             <div className="projects-grid">
               {projects.map(
                 ({ id, name, renderedImage, sourceImage, timestamp }) => (
@@ -181,9 +198,6 @@ export default function Home() {
                         src={renderedImage || sourceImage}
                         alt={name || "Project"}
                       />
-                      <div className="badge">
-                        <span>Community</span>
-                      </div>
                     </div>
                     <div className="card-body">
                       <div>
