@@ -2,7 +2,7 @@ import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { validateServerUploadBoundary } from "../../lib/constants";
 import { useEffect, useRef, useState } from "react";
 import { createProject, getProjects } from "../../lib/puter.action";
@@ -130,8 +130,9 @@ export default function Home() {
         </div>
         <h1>Build beautiful spaces at the speed of thought with Florepy</h1>
         <p className="subtitle">
-          Florepy is an AI-first design enviornment that helps you visualize,
-          render and ship architectural projects faster than ever.
+          Upload your 2D floor plan, let our AI render a photorealistic 3D
+          visualization, then compare and export. Built for architects,
+          designers, and real estate professionals.
         </p>
 
         <div className="actions">
@@ -151,27 +152,31 @@ export default function Home() {
                 <Layers className="icon" />
               </div>
               <h3>Upload your floor plan</h3>
-              <p>Supports JPG, PNG, and SVG vector formats up to 10MB</p>
+              <p>Supports JPG, PNG, WEBP, and SVG formats up to 10MB</p>
             </div>
             <Upload onComplete={handleUploadComplete} />
           </div>
         </div>
       </section>
 
-      <section className="projects">
+      <section className="projects" id="gallery">
         <div className="section-inner">
           <div className="section-head">
             <div className="copy">
-              <h2>Projects</h2>
+              <h2>Community Projects</h2>
               <p>
-                Your latest architectural generations and floor plan uploads.
+                Explore public architectural visualizations shared by the
+                Florepy community.
               </p>
             </div>
           </div>
           {isLoading ? (
             <div className="projects-grid">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="project-card animate-pulse border border-zinc-100 bg-white shadow-sm overflow-hidden flex flex-col h-full">
+                <div
+                  key={i}
+                  className="project-card animate-pulse border border-zinc-100 bg-white shadow-sm overflow-hidden flex flex-col h-full"
+                >
                   <div className="preview aspect-4/3 bg-zinc-200 w-full relative"></div>
                   <div className="card-body p-4 flex justify-between items-end flex-grow border-t border-zinc-100">
                     <div className="w-full">
@@ -183,48 +188,60 @@ export default function Home() {
               ))}
             </div>
           ) : projects.length > 0 ? (
-            <div className="projects-grid">
-              {projects.map(
-                ({ id, name, renderedImage, sourceImage, timestamp }) => (
-                  <div
-                    className="project-card group"
-                    key={id}
-                    onClick={() => navigate(`/visualizer/${id}`)}
-                  >
-                    <div className="preview">
-                      <img
-                        src={renderedImage || sourceImage}
-                        alt={name || "Project"}
-                      />
-                    </div>
-                    <div className="card-body">
-                      <div>
-                        <h3>{name}</h3>
-                        <div className="meta">
-                          <Clock size={12} />
-                          <span>
-                            {new Date(timestamp).toLocaleDateString()}
-                          </span>
-                          <span>By SS</span>
+            <>
+              <div className="projects-grid">
+                {projects
+                  .slice(0, 6)
+                  .map(
+                    ({ id, name, renderedImage, sourceImage, timestamp }) => (
+                      <div
+                        className="project-card group"
+                        key={id}
+                        onClick={() => navigate(`/visualizer/${id}`)}
+                      >
+                        <div className="preview">
+                          <img
+                            src={renderedImage || sourceImage}
+                            alt={name || "Project"}
+                          />
+                        </div>
+                        <div className="card-body">
+                          <div>
+                            <h3>{name}</h3>
+                            <div className="meta">
+                              <Clock size={12} />
+                              <span>
+                                {new Date(timestamp).toLocaleDateString()}
+                              </span>
+                              <span>By SS</span>
+                            </div>
+                          </div>
+                          <div className="arrow">
+                            <ArrowRight size={18} />
+                          </div>
                         </div>
                       </div>
-                      <div className="arrow">
-                        <ArrowRight size={18} />
-                      </div>
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
+                    ),
+                  )}
+              </div>
+              <div className="flex justify-center mt-10">
+                <Link
+                  to="/community"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-black transition-colors border border-zinc-200 hover:border-zinc-400 px-6 py-2.5 rounded-lg bg-white shadow-sm"
+                >
+                  See all community projects <ArrowRight size={14} />
+                </Link>
+              </div>
+            </>
           ) : (
             <div className="empty-projects-state">
               <div className="empty-icon-wrap">
                 <FolderPlus className="empty-icon" size={26} />
               </div>
-              <h3>No projects created yet</h3>
+              <h3>No community projects yet</h3>
               <p>
-                Upload your first 2D floor plan above to start generating 3D
-                architectural visualizations.
+                Be the first to share your architectural visualization with the
+                community.
               </p>
               <a href="#upload" className="empty-cta">
                 Upload Floor Plan <ArrowRight size={14} className="icon" />

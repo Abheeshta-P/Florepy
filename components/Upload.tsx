@@ -192,7 +192,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
             <p>
               {isSignedIn ? ("Click to upload or just drag and drop") : ("Signin or Signup with puter to upload")}
             </p>
-            <p className="help">Supports JPG, PNG & SVG up to 10MB.</p>
+            <p className="help">Supports JPG, PNG, WEBP & SVG up to 10MB.</p>
             {error && <p className="text-red-500 text-xs font-semibold mt-2">{error}</p>}
           </div>
         </div>) : (
