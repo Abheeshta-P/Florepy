@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useOutletContext, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router"; import { useAuth } from "../../components/AuthProvider";
 import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import { Download, RefreshCcw, Share2, X } from "lucide-react";
@@ -10,10 +10,17 @@ import {
 } from "react-compare-slider";
 import { fetchBlobFromUrl, getImageExtension } from "../../lib/utils";
 
+export function meta() {
+  return [
+    { title: "Visualizer - Florepy" },
+    { name: "description", content: "View and compare your architectural visualizations." }
+  ];
+}
+
 function VisualizerId() {
   // which user which id
   const { id } = useParams();
-  const { userId } = useOutletContext<AuthContext>();
+  const { userId } = useAuth();
 
   const navigate = useNavigate();
 
@@ -140,111 +147,94 @@ function VisualizerId() {
 
   return (
     <div className="visualizer">
-      <nav className="topbar">
-        <div className="brand">
-          <img src="/florepy.png" alt="Logo" width={35} height={35} />
-          <span className="name">Florepy</span>
-        </div>
-        <Button variant="ghost" size="sm" onClick={handleBack} className="exit">
-          <X className="icon" /> Exit Editor
-        </Button>
-      </nav>
-
       <section className="content">
-        <div className="panel">
-          <div className="panel-header">
-            <div className="panel-meta">
-              <p>Project</p>
-              <h2>{project?.name || `Residence ${id}`}</h2>
-              <p className="note">Created by you</p>
-            </div>
-            <div className="panel-actions">
-              <Button
-                size="sm"
-                onClick={handleExport}
-                className="export"
-                disabled={!currentImage}
-              >
-                <Download className="w-4 h-4 mr-2" /> Export
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {}}
-                className="share"
-                disabled={!currentImage}
-              >
-                <Share2 className="w-4 h-4 mr-2" /> Share
-              </Button>
-            </div>
-          </div>
-          <div className={`render-area ${isProcessing ? "is-processing" : ""}`}>
-            {currentImage ? (
-              <img src={currentImage} alt="AI Render" className="render-img" />
-            ) : (
-              <div className="render-placeholder">
-                {project?.sourceImage && (
-                  <img
-                    src={project.sourceImage}
-                    alt="Original"
-                    className="render-fallback"
-                  />
-                )}
+        {isProjectLoading ? (
+          <div className="panel animate-pulse">
+            <div className="panel-header">
+              <div className="panel-meta w-full max-w-[50%]">
+                <div className="h-3 bg-zinc-200 rounded w-16 mb-4"></div>
+                <div className="h-8 bg-zinc-200 rounded w-full mb-3"></div>
+                <div className="h-3 bg-zinc-200 rounded w-24"></div>
               </div>
-            )}
-
-            {isProcessing && (
-              <div className="render-overlay">
-                <div className="rendering-card">
-                  <RefreshCcw className="spinner" />
-                  <span className="title">Rendering...</span>
-                  <span className="subtitle">
-                    Generating your 3D visualization...
-                  </span>
-                </div>
+              <div className="panel-actions">
+                <div className="h-9 bg-zinc-200 rounded w-24"></div>
+                <div className="h-9 bg-zinc-200 rounded w-24"></div>
               </div>
-            )}
+            </div>
+            <div className="render-area bg-zinc-200/50 min-h-[500px]"></div>
           </div>
-        </div>
-
-        {!isProcessing && currentImage && (
-          <div className="panel compare">
+        ) : (
+          <div className="panel shadow-sm">
             <div className="panel-header">
               <div className="panel-meta">
-                <p>Comparison</p>
-                <h3>Before and After</h3>
+                <p>Project</p>
+                <h2>{project?.name || `Residence ${id}`}</h2>
+                <p className="note">Created by you &bull; Drag slider to compare</p>
               </div>
-              <div className="hint">Drag to compare</div>
+              <div className="panel-actions">
+                <Button
+                  size="sm"
+                  onClick={handleExport}
+                  className="export"
+                  disabled={!currentImage}
+                >
+                  <Download className="w-4 h-4 mr-2" /> Export
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {}}
+                  className="share"
+                  disabled={!currentImage}
+                >
+                  <Share2 className="w-4 h-4 mr-2" /> Share
+                </Button>
+              </div>
             </div>
-
-            <div className="compare-stage">
-              {project?.sourceImage && currentImage ? (
+            <div className={`render-area ${isProcessing ? "is-processing" : ""} min-h-[500px]`}>
+              {currentImage && project?.sourceImage && !isProcessing ? (
                 <ReactCompareSlider
                   defaultValue={50}
-                  style={{ width: "100%", height: "auto" }}
+                  style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
                   itemOne={
                     <ReactCompareSliderImage
-                      src={project?.sourceImage}
+                      src={project.sourceImage}
                       alt="before"
-                      className="compare-img"
+                      className="render-img w-full h-full"
+                      style={{ objectFit: 'contain' }}
                     />
                   }
                   itemTwo={
                     <ReactCompareSliderImage
-                      src={currentImage || ""}
+                      src={currentImage}
                       alt="after"
-                      className="compare-img"
+                      className="render-img w-full h-full"
+                      style={{ objectFit: 'contain' }}
                     />
                   }
                 />
+              ) : currentImage ? (
+                <img src={currentImage} alt="AI Render" className="render-img" />
               ) : (
-                <div className="compare-fallback">
+                <div className="render-placeholder flex items-center justify-center w-full h-full absolute inset-0">
                   {project?.sourceImage && (
                     <img
                       src={project.sourceImage}
-                      alt="Before"
-                      className="compare-img"
+                      alt="Original"
+                      className="render-fallback object-contain w-full h-full max-h-[80vh]"
                     />
                   )}
+                </div>
+              )}
+
+              {isProcessing && (
+                <div className="render-overlay absolute inset-0 z-50 flex items-center justify-center bg-zinc-100/80 backdrop-blur-sm">
+                  <div className="rendering-card bg-white p-6 rounded-2xl shadow-sm flex flex-col items-center">
+                    <RefreshCcw className="spinner animate-spin text-primary w-8 h-8 mb-4" />
+                    <span className="title font-bold text-lg mb-1">Rendering...</span>
+                    <span className="subtitle text-sm text-zinc-500">
+                      Generating your 3D visualization...
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

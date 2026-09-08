@@ -1,6 +1,6 @@
 import { CheckCircle2, ImageIcon, UploadIcon, Loader2 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
-import { useOutletContext } from "react-router";
+import { useAuth } from "./AuthProvider";
 import {
   ALLOWED_FILE_EXTENSIONS,
   ALLOWED_IMAGE_TYPES,
@@ -26,7 +26,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
 
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isSignedIn } = useOutletContext<AuthContext>();
+  const { isSignedIn } = useAuth();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,7 +192,7 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
             <p>
               {isSignedIn ? ("Click to upload or just drag and drop") : ("Signin or Signup with puter to upload")}
             </p>
-            <p className="help">Supports JPG, PNG & SVG up to 10MB.</p>
+            <p className="help">Supports JPG, PNG, WEBP & SVG up to 10MB.</p>
             {error && <p className="text-red-500 text-xs font-semibold mt-2">{error}</p>}
           </div>
         </div>) : (
