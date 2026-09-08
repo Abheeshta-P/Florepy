@@ -37,7 +37,7 @@ function NavBar() {
           <ul className="links">
             <a href="/#hero">Home</a>
             <a href="/#upload">Upload</a>
-            <a href="/#gallery">Community</a>
+            <Link to="/community">Community</Link>
             {isAuthLoading ? (
               <div className="w-20 h-4 bg-zinc-200 animate-pulse rounded mx-2"></div>
             ) : isSignedIn ? (

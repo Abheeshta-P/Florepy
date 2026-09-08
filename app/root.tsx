@@ -31,6 +31,7 @@ export const links: Route.LinksFunction = () => [
 ];
 
 import NavBar from "../components/NavBar";
+import Footer from "../components/Footer";
 import { AuthProvider } from "../components/AuthProvider";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <AuthProvider>
           <NavBar />
           {children}
+          <Footer />
           <ScrollRestoration />
           <Scripts />
         </AuthProvider>
@@ -81,7 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <main className="min-h-screen bg-background text-foreground relative z-10">
+    <main className="min-h-screen bg-background text-foreground">
       <Outlet />
     </main>
   );
