@@ -12,7 +12,7 @@ export function meta() {
 }
 
 export default function Dashboard() {
-  const { isSignedIn, isAuthLoading, userName } = useAuth();
+  const { isSignedIn, isAuthLoading, userName, userId } = useAuth();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +60,9 @@ export default function Dashboard() {
         sourceImage: base64Image,
         renderedImage: undefined,
         timestamp: Date.now(),
+        ownerId: userId ?? null,
+        sharedBy: userName ?? null,
+        isPublic: false,
       };
 
       const saved = await createProject({ item: newItem, visibility: "private" });

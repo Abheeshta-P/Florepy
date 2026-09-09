@@ -20,7 +20,7 @@ export function meta() {
 function VisualizerId() {
   // which user which id
   const { id } = useParams();
-  const { userId } = useAuth();
+  const { userId, userName } = useAuth();
 
   const navigate = useNavigate();
 
@@ -79,6 +79,7 @@ function VisualizerId() {
           renderedPath: result.renderedPath,
           timestamp: Date.now(),
           ownerId: item.ownerId ?? userId ?? null,
+          sharedBy: item.sharedBy ?? userName ?? null,
           isPublic: item.isPublic ?? false,
         };
 

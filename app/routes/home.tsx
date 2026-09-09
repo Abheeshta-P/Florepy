@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router";
 import { validateServerUploadBoundary } from "../../lib/constants";
 import { useEffect, useRef, useState } from "react";
 import { createProject, getProjects } from "../../lib/puter.action";
+import { useAuth } from "../../components/AuthProvider";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -52,6 +53,7 @@ export function meta({}: Route.MetaArgs) {
 
 export default function Home() {
   const navigate = useNavigate();
+  const { userName, userId } = useAuth();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const isCreatingProjectRef = useRef(false);
@@ -79,6 +81,9 @@ export default function Home() {
         sourceImage: base64Image,
         renderedImage: undefined,
         timestamp: Date.now(),
+        ownerId: userId ?? null,
+        sharedBy: userName ?? null,
+        isPublic: false,
       };
 
       const saved = await createProject({
@@ -193,7 +198,14 @@ export default function Home() {
                 {projects
                   .slice(0, 6)
                   .map(
-                    ({ id, name, renderedImage, sourceImage, timestamp }) => (
+                    ({
+                      id,
+                      name,
+                      renderedImage,
+                      sourceImage,
+                      timestamp,
+                      sharedBy,
+                    }) => (
                       <div
                         className="project-card group"
                         key={id}
@@ -213,7 +225,7 @@ export default function Home() {
                               <span>
                                 {new Date(timestamp).toLocaleDateString()}
                               </span>
-                              <span>By SS</span>
+                              <span>{sharedBy ? `By ${sharedBy}` : "By Creator"}</span>
                             </div>
                           </div>
                           <div className="arrow">

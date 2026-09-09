@@ -62,7 +62,7 @@ export default function Community() {
           </div>
         ) : projects.length > 0 ? (
           <div className="projects-grid">
-            {projects.map(({ id, name, renderedImage, sourceImage, timestamp }) => (
+            {projects.map(({ id, name, renderedImage, sourceImage, timestamp, sharedBy }) => (
               <div
                 className="project-card group"
                 key={id}
@@ -77,6 +77,7 @@ export default function Community() {
                     <div className="meta">
                       <Clock size={12} />
                       <span>{new Date(timestamp).toLocaleDateString()}</span>
+                      <span>{sharedBy ? `By ${sharedBy}` : "By Creator"}</span>
                     </div>
                   </div>
                   <div className="arrow">
