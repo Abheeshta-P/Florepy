@@ -83,6 +83,8 @@ export const createProject = async ({
     ...rest,
     sourceImage: resolvedSource,
     renderedImage: resolvedRender,
+    visibility,
+    isPublic: visibility === "public" || Boolean(item.isPublic),
   };
 
   try {
@@ -174,4 +176,28 @@ export const getProjectById = async ({ id }: { id: string }) => {
     console.error("Failed to fetch project:", error);
     return null;
   }
+};
+
+export const toggleProjectVisibility = async ({
+  project,
+  isPublic,
+}: {
+  project: DesignItem;
+  isPublic: boolean;
+}): Promise<DesignItem | null> => {
+  if (!project?.id) return null;
+
+  const visibility = isPublic ? "public" : "private";
+  const updatedItem: DesignItem = {
+    ...project,
+    isPublic,
+    visibility,
+  };
+
+  const saved = await createProject({
+    item: updatedItem,
+    visibility,
+  });
+
+  return saved ?? null;
 };

@@ -26,6 +26,7 @@ interface DesignItem {
   sharedBy?: string | null;
   sharedAt?: string | null;
   isPublic?: boolean;
+  visibility?: "private" | "public";
 }
 
 interface DesignConfig {
