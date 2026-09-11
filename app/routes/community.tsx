@@ -6,7 +6,11 @@ import { getProjects } from "../../lib/puter.action";
 export function meta() {
   return [
     { title: "Community - Florepy" },
-    { name: "description", content: "Explore architectural visualizations shared by the Florepy community." },
+    {
+      name: "description",
+      content:
+        "Explore architectural visualizations shared by the Florepy community.",
+    },
   ];
 }
 
@@ -19,8 +23,8 @@ export default function Community() {
     const fetchProjects = async () => {
       try {
         const items = await getProjects();
-        // Filter by isPublic once wired — for now show all
-        setProjects(items);
+        // Only show projects that are marked public
+        setProjects(items.filter((p) => Boolean(p.isPublic)));
       } finally {
         setIsLoading(false);
       }
@@ -37,7 +41,10 @@ export default function Community() {
             <Globe size={12} /> Community
           </div>
           <h1>Community Projects</h1>
-          <p>Explore architectural visualizations created and shared by the Florepy community.</p>
+          <p>
+            Explore architectural visualizations created and shared by the
+            Florepy community.
+          </p>
         </div>
       </div>
 
@@ -62,30 +69,47 @@ export default function Community() {
           </div>
         ) : projects.length > 0 ? (
           <div className="projects-grid">
-            {projects.map(({ id, name, renderedImage, sourceImage, timestamp, sharedBy }) => (
-              <div
-                className="project-card group"
-                key={id}
-                onClick={() => navigate(`/visualizer/${id}`)}
-              >
-                <div className="preview">
-                  <img src={renderedImage || sourceImage} alt={name || "Project"} />
-                </div>
-                <div className="card-body">
-                  <div>
-                    <h3>{name}</h3>
-                    <div className="meta">
-                      <Clock size={12} />
-                      <span>{new Date(timestamp).toLocaleDateString()}</span>
-                      <span>{sharedBy ? `By ${sharedBy}` : "By Creator"}</span>
+            {projects.map(
+              ({
+                id,
+                name,
+                renderedImage,
+                sourceImage,
+                timestamp,
+                sharedBy,
+              }) => (
+                <div
+                  className="project-card group"
+                  key={id}
+                  onClick={() => navigate(`/visualizer/${id}`)}
+                >
+                  <div className="preview">
+                    <img
+                      src={renderedImage || sourceImage}
+                      alt={name || "Project"}
+                    />
+                    <span className="badge badge-public">
+                      <Globe size={11} /> Public
+                    </span>
+                  </div>
+                  <div className="card-body">
+                    <div>
+                      <h3>{name}</h3>
+                      <div className="meta">
+                        <Clock size={12} />
+                        <span>{new Date(timestamp).toLocaleDateString()}</span>
+                        <span>
+                          {sharedBy ? `By ${sharedBy}` : "By Creator"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="arrow">
+                      <ArrowRight size={20} />
                     </div>
                   </div>
-                  <div className="arrow">
-                    <ArrowRight size={18} />
-                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         ) : (
           <div className="empty-projects-state">
@@ -93,7 +117,10 @@ export default function Community() {
               <Globe className="empty-icon" size={26} />
             </div>
             <h3>No community projects yet</h3>
-            <p>Be the first to share your architectural visualization with the community.</p>
+            <p>
+              Be the first to share your architectural visualization with the
+              community.
+            </p>
             <Link to="/" className="empty-cta">
               Upload Floor Plan <ArrowRight size={14} className="icon" />
             </Link>

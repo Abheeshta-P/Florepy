@@ -3,7 +3,7 @@ import {
   getOrCreateHostingConfig,
   uploadImageToHosting,
 } from "./puter.hosting";
-import { isHostedUrl } from "./utils";
+import { isHostedUrl, HOSTING_DOMAIN_SUFFIX } from "./utils";
 import { PUTER_WORKER_URL } from "./constants";
 
 export const signIn = async () => await puter.auth.signIn();
@@ -32,8 +32,8 @@ export const createProject = async ({
 
   const projectId = item.id;
 
-  //  get where to host
-  const hosting = visibility === "public" ? await getOrCreateHostingConfig() : null;
+  // Always use hosting config so image URLs are permanent and never expire with token errors
+  const hosting = await getOrCreateHostingConfig();
 
   // host
   const hostedSource = projectId
@@ -84,7 +84,7 @@ export const createProject = async ({
     sourceImage: resolvedSource,
     renderedImage: resolvedRender,
     visibility,
-    isPublic: visibility === "public" || Boolean(item.isPublic),
+    isPublic: visibility === "public",
   };
 
   try {
@@ -117,6 +117,40 @@ export const createProject = async ({
   }
 };
 
+// Helper to heal old/expiring Puter read URLs into permanent hosted URLs
+export const healImageUrl = async (
+  url: string | null | undefined,
+  projectId: string,
+  label: "source" | "rendered",
+  subdomain?: string | null
+): Promise<string | undefined> => {
+  if (!url) return undefined;
+  if (isHostedUrl(url)) return url;
+
+  // 1. If subdomain is available, use the permanent hosted URL
+  if (subdomain) {
+    const extMatch = url.match(/\.(png|jpe?g|webp|svg)/i);
+    const ext = extMatch ? extMatch[1] : "png";
+    return `https://${subdomain}${HOSTING_DOMAIN_SUFFIX}/project/${projectId}/${label}.${ext}`;
+  }
+
+  // 2. If it's an expiring Puter read URL, try refreshing with puter.fs.getReadURL if on client
+  if (url.includes("api.puter.com") || url.includes("token=")) {
+    if (typeof window !== "undefined") {
+      try {
+        const extMatch = url.match(/\.(png|jpe?g|webp|svg)/i);
+        const ext = extMatch ? extMatch[1] : "png";
+        const fresh = await puter.fs.getReadURL(`project/${projectId}/${label}.${ext}`).catch(() => null);
+        if (fresh) return fresh;
+      } catch {
+        // fallback to original
+      }
+    }
+  }
+
+  return url;
+};
+
 // from BE/worker in puter
 export const getProjects = async () => {
   if (!PUTER_WORKER_URL) {
@@ -136,8 +170,27 @@ export const getProjects = async () => {
     }
 
     const data = (await response.json()) as { projects?: DesignItem[] | null };
+    const rawProjects = Array.isArray(data?.projects) ? data.projects : [];
 
-    return Array.isArray(data?.projects) ? data?.projects : [];
+    const hostingConfig = await getOrCreateHostingConfig().catch(() => null);
+
+    const mapped = await Promise.all(
+      rawProjects.map(async (p) => {
+        const isPublic = p.visibility ? p.visibility === "public" : (Boolean(p.isPublic) && p.visibility !== "private");
+        const sourceImage = (await healImageUrl(p.sourceImage, p.id, "source", hostingConfig?.subdomain)) || p.sourceImage;
+        const renderedImage = (await healImageUrl(p.renderedImage, p.id, "rendered", hostingConfig?.subdomain)) || p.renderedImage;
+
+        return {
+          ...p,
+          isPublic,
+          visibility: (isPublic ? "public" : "private") as "public" | "private",
+          sourceImage,
+          renderedImage,
+        };
+      })
+    );
+
+    return mapped;
   } catch (error) {
     console.error("Failed to get projects", error);
     return [];
@@ -171,7 +224,22 @@ export const getProjectById = async ({ id }: { id: string }) => {
 
     console.log("Fetched project data:", data);
 
-    return data?.project ?? null;
+    const project = data?.project ?? null;
+    if (!project) return null;
+
+    const hostingConfig = await getOrCreateHostingConfig().catch(() => null);
+    const isPublic = project.visibility ? project.visibility === "public" : (Boolean(project.isPublic) && project.visibility !== "private");
+
+    const sourceImage = (await healImageUrl(project.sourceImage, project.id, "source", hostingConfig?.subdomain)) || project.sourceImage;
+    const renderedImage = (await healImageUrl(project.renderedImage, project.id, "rendered", hostingConfig?.subdomain)) || project.renderedImage;
+
+    return {
+      ...project,
+      isPublic,
+      visibility: (isPublic ? "public" : "private") as "public" | "private",
+      sourceImage,
+      renderedImage,
+    };
   } catch (error) {
     console.error("Failed to fetch project:", error);
     return null;
@@ -194,10 +262,23 @@ export const toggleProjectVisibility = async ({
     visibility,
   };
 
+  // 1. Direct KV update on user's puter to ensure immediate consistency
+  try {
+    const key = `florepy_project_${project.id}`;
+    const existing = await puter.kv.get(key).catch(() => null);
+    const merged = typeof existing === "object" && existing !== null
+      ? { ...existing, ...updatedItem }
+      : updatedItem;
+    await puter.kv.set(key, merged).catch(() => null);
+  } catch (err) {
+    console.warn("Direct KV update:", err);
+  }
+
+  // 2. Call createProject (which passes payload to worker and syncs hosting)
   const saved = await createProject({
     item: updatedItem,
     visibility,
   });
 
-  return saved ?? null;
+  return saved ?? updatedItem;
 };

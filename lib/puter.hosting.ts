@@ -21,6 +21,19 @@ export const getOrCreateHostingConfig =
       )) as HostingConfig | null;
       if (existing?.subdomain) return { subdomain: existing.subdomain };
 
+      // Check if a florepy hosting site already exists without prompting permissions
+      try {
+        const hostedSites = (await puter.hosting.list()) as Array<{ subdomain: string }>;
+        const found = hostedSites?.find((s) => s.subdomain?.startsWith("florepy-"));
+        if (found?.subdomain) {
+          const record: HostingConfig = { subdomain: found.subdomain };
+          await puter.kv.set(HOSTING_CONFIG_KEY, record).catch(() => {});
+          return record;
+        }
+      } catch {
+        // Continue if listing fails
+      }
+
       const subdomain = createHostingSlug();
       
       const hasPerms = await puter.perms.requestManageSubdomains();
@@ -75,14 +88,13 @@ export const uploadImageToHosting = async ({
     await puter.fs.mkdir(dir, { createMissingParents: true });
     await puter.fs.write(filePath, uploadFile);
 
-    if (visibility === "private" || !hosting) {
-      const privateUrl = await puter.fs.getReadURL(filePath);
-      return { url: privateUrl };
+    if (hosting) {
+      const hostedUrl = getHostedUrl({ subdomain: hosting.subdomain }, filePath);
+      if (hostedUrl) return { url: hostedUrl };
     }
 
-    const hostedUrl = getHostedUrl({ subdomain: hosting.subdomain }, filePath);
-
-    return hostedUrl ? { url: hostedUrl } : null;
+    const privateUrl = await puter.fs.getReadURL(filePath);
+    return { url: privateUrl };
   } catch (error) {
     console.warn(`Failed to store the hosted image: ${error}`);
     return null;

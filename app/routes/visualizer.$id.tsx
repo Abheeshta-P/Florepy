@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router"; import { useAuth } from "../../components/AuthProvider";
+import { useNavigate, useParams } from "react-router";
+import puter from "@heyputer/puter.js";
+import { useAuth } from "../../components/AuthProvider";
 import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import { Download, RefreshCcw, Share2, X } from "lucide-react";
@@ -39,7 +41,35 @@ function VisualizerId() {
     if (!currentImage) return;
 
     try {
-      const data = await fetchBlobFromUrl(currentImage);
+      let data = await fetchBlobFromUrl(currentImage);
+
+      // Fallback: if fetch failed (e.g. Puter read token expired), read directly from puter.fs
+      if (!data && id) {
+        try {
+          const candidatePaths = [
+            `project/${id}/rendered.png`,
+            `project/${id}/rendered.jpg`,
+            `project/${id}/rendered.jpeg`,
+            `project/${id}/source.png`,
+            `project/${id}/source.jpg`,
+            `project/${id}/source.jpeg`,
+          ];
+          for (const filePath of candidatePaths) {
+            try {
+              const blob = await puter.fs.read(filePath);
+              if (blob && blob.size > 0) {
+                data = { blob, contentType: blob.type || "image/png" };
+                break;
+              }
+            } catch {
+              // try next path
+            }
+          }
+        } catch (fsErr) {
+          console.warn("Direct Puter FS read fallback failed:", fsErr);
+        }
+      }
+
       if (!data) throw new Error("Failed to fetch image blob");
 
       const ext = getImageExtension(data.contentType, currentImage) || "png";
@@ -53,12 +83,6 @@ function VisualizerId() {
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Failed to export image:", error);
-      const link = document.createElement("a");
-      link.href = currentImage;
-      link.download = `${project?.name || `Residence-${id || "render"}`}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     }
   };
 
@@ -72,6 +96,9 @@ function VisualizerId() {
       if (result.renderedImage) {
         setCurrentImage(result.renderedImage);
 
+        // Preserve current visibility (public or private) instead of downgrading
+        const currentVisibility = item.isPublic ? "public" : (item.visibility || "private");
+
         // put this image in the kv of the project which is already present
         const updatedItem: DesignItem = {
           ...item,
@@ -80,12 +107,13 @@ function VisualizerId() {
           timestamp: Date.now(),
           ownerId: item.ownerId ?? userId ?? null,
           sharedBy: item.sharedBy ?? userName ?? null,
-          isPublic: item.isPublic ?? false,
+          isPublic: currentVisibility === "public",
+          visibility: currentVisibility,
         };
 
         const saved = await createProject({
           item: updatedItem,
-          visibility: "private",
+          visibility: currentVisibility,
         });
 
         if (saved) {

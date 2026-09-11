@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
+import { ArrowRight, Clock, FolderPlus, Globe, Layers } from "lucide-react";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
@@ -115,7 +115,8 @@ export default function Home() {
     const fetchProjects = async () => {
       try {
         const items = await getProjects();
-        setProjects(items);
+        // Only show projects that are marked public
+        setProjects(items.filter((p) => Boolean(p.isPublic)));
       } finally {
         setIsLoading(false);
       }
@@ -216,6 +217,9 @@ export default function Home() {
                             src={renderedImage || sourceImage}
                             alt={name || "Project"}
                           />
+                          <span className="badge badge-public">
+                            <Globe size={11} /> Public
+                          </span>
                         </div>
                         <div className="card-body">
                           <div>
@@ -225,11 +229,13 @@ export default function Home() {
                               <span>
                                 {new Date(timestamp).toLocaleDateString()}
                               </span>
-                              <span>{sharedBy ? `By ${sharedBy}` : "By Creator"}</span>
+                              <span>
+                                {sharedBy ? `By ${sharedBy}` : "By Creator"}
+                              </span>
                             </div>
                           </div>
                           <div className="arrow">
-                            <ArrowRight size={18} />
+                            <ArrowRight size={20} />
                           </div>
                         </div>
                       </div>
