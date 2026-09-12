@@ -209,7 +209,7 @@ export default function Dashboard() {
                       checked={Boolean(isPublic)}
                       loading={togglingId === id}
                       onChange={(_, e) => handleToggleVisibility(e, project)}
-                      className="absolute top-3 left-3 z-10"
+                      className="absolute top-3 right-3 z-10"
                     />
                   </div>
                   <div className="card-body">

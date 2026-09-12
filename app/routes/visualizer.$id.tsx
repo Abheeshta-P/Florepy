@@ -4,8 +4,8 @@ import puter from "@heyputer/puter.js";
 import { useAuth } from "../../components/AuthProvider";
 import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
-import { Download, RefreshCcw, Share2, X } from "lucide-react";
-import { createProject, getProjectById } from "../../lib/puter.action";
+import { Check, Copy, Download, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
+import { createProject, getProjectById, toggleProjectVisibility } from "../../lib/puter.action";
 import {
   ReactCompareSlider,
   ReactCompareSliderImage,
@@ -34,8 +34,62 @@ function VisualizerId() {
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [project, setProject] = useState<DesignItem | null>(null);
   const [isProjectLoading, setIsProjectLoading] = useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleBack = () => navigate("/");
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+    }
+  };
+
+  const handleShareClick = () => {
+    setShowShareModal(true);
+  };
+
+  const handleConfirmShare = async () => {
+    if (!project) return;
+    try {
+      setIsSharing(true);
+      const updated = await toggleProjectVisibility({
+        project,
+        isPublic: true,
+      });
+      if (updated) {
+        setProject(updated);
+      }
+      await copyShareLink();
+    } catch (err) {
+      console.error("Failed to publish and share project:", err);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleMakePrivate = async () => {
+    if (!project) return;
+    try {
+      setIsSharing(true);
+      const updated = await toggleProjectVisibility({
+        project,
+        isPublic: false,
+      });
+      if (updated) {
+        setProject(updated);
+      }
+    } catch (err) {
+      console.error("Failed to unpublish project:", err);
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   const handleExport = async () => {
     if (!currentImage) return;
@@ -211,9 +265,9 @@ function VisualizerId() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => {}}
-                  className="share"
-                  disabled={!currentImage}
+                  onClick={handleShareClick}
+                  className="share cursor-pointer"
+                  disabled={!currentImage || isSharing}
                 >
                   <Share2 className="w-4 h-4 mr-2" /> Share
                 </Button>
@@ -270,6 +324,109 @@ function VisualizerId() {
           </div>
         )}
       </section>
+
+      {/* Ultra-Compact Share Modal */}
+      {showShareModal && (
+        <div className="modal-overlay" onClick={() => !isSharing && setShowShareModal(false)}>
+          <div className="bg-white rounded-xl border border-zinc-200/90 max-w-[360px] w-full p-4 shadow-xl relative" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-zinc-100">
+              <div className="flex items-center gap-2">
+               
+                <h3 className="text-sm font-semibold text-zinc-900">Share Project</h3>
+              </div>
+              <button
+                onClick={() => !isSharing && setShowShareModal(false)}
+                className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSharing}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div>
+              {project?.isPublic ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-zinc-500 leading-normal">
+                    Anyone with this link can view the visualization.
+                  </p>
+
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={typeof window !== "undefined" ? window.location.href : ""}
+                      className="w-full text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-1.5 text-zinc-700 select-all outline-none truncate"
+                    />
+                    <button
+                      type="button"
+                      onClick={copyShareLink}
+                      className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-900 text-white hover:bg-black transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    >
+                      {copied ? (
+                        <>
+                          <Check size={12} className="text-emerald-400" /> Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} /> Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-400">
+                    <span className="flex items-center gap-1.5 text-zinc-500 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Public to anyone
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleMakePrivate}
+                      disabled={isSharing}
+                      className="hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Make Private
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-zinc-50 border border-zinc-200/80 rounded-lg p-2.5 flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-zinc-200/70 text-zinc-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Lock size={13} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-zinc-900">Private Project</h4>
+                      <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                        Only you can view this visualization. Publish it to generate a public share link.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end items-center pt-1">
+                    <button
+                      type="button"
+                      onClick={handleConfirmShare}
+                      disabled={isSharing}
+                      className="text-xs font-medium text-white bg-zinc-900 hover:bg-black px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
+                    >
+                      {isSharing ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" /> Publishing...
+                        </>
+                      ) : (
+                        <>
+                          <Globe size={12} /> Publish &amp; Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

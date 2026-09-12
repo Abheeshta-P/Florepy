@@ -44,15 +44,15 @@ export const Toggle: React.FC<ToggleProps> = ({
         title={
           title ||
           (checked
-            ? `${activeLabel} — click to change`
-            : `${inactiveLabel} — click to change`)
+            ? `${activeLabel} - click to change`
+            : `${inactiveLabel} - click to change`)
         }
       >
         {displayText && (
           <span
             className={`text-[11px] font-medium transition-colors ${
               checked
-                ? "text-emerald-600"
+                ? "text-primary"
                 : "text-zinc-400 group-hover/toggle:text-zinc-600"
             }`}
           >
@@ -66,7 +66,7 @@ export const Toggle: React.FC<ToggleProps> = ({
           disabled={disabled || loading}
           className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 ${
             checked
-              ? "bg-emerald-500"
+              ? "bg-primary"
               : "bg-zinc-200 group-hover/toggle:bg-zinc-300"
           }`}
         >
@@ -91,12 +91,12 @@ export const Toggle: React.FC<ToggleProps> = ({
         title={
           title ||
           (checked
-            ? `${activeLabel} — click to make ${inactiveLabel}`
-            : `${inactiveLabel} — click to make ${activeLabel}`)
+            ? `${activeLabel} - click to make ${inactiveLabel}`
+            : `${inactiveLabel} - click to make ${activeLabel}`)
         }
         className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md border shadow-xs transition-all duration-200 cursor-pointer ${
           checked
-            ? "bg-white/95 text-emerald-700 border-emerald-200/90 hover:bg-emerald-50/90"
+            ? "bg-white/95 text-primary border-primary/20 hover:bg-white hover:border-primary/40"
             : "bg-white/90 text-zinc-600 border-zinc-200/90 hover:bg-white hover:text-zinc-900"
         } ${disabled || loading ? "opacity-60 cursor-not-allowed" : ""}`}
       >
@@ -105,7 +105,7 @@ export const Toggle: React.FC<ToggleProps> = ({
         </span>
         <span
           className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors duration-200 ${
-            checked ? "bg-emerald-500" : "bg-zinc-300"
+            checked ? "bg-primary" : "bg-zinc-300"
           }`}
         >
           <span

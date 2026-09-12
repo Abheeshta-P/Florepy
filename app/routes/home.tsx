@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, FolderPlus, Globe, Layers } from "lucide-react";
+import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
@@ -217,9 +217,6 @@ export default function Home() {
                             src={renderedImage || sourceImage}
                             alt={name || "Project"}
                           />
-                          <span className="badge badge-public">
-                            <Globe size={11} /> Public
-                          </span>
                         </div>
                         <div className="card-body">
                           <div>

@@ -88,9 +88,6 @@ export default function Community() {
                       src={renderedImage || sourceImage}
                       alt={name || "Project"}
                     />
-                    <span className="badge badge-public">
-                      <Globe size={11} /> Public
-                    </span>
                   </div>
                   <div className="card-body">
                     <div>
