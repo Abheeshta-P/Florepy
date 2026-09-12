@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Clock, FolderPlus, Plus, X } from "lucide-react";
+import { ArrowRight, Clock, FolderPlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Toggle from "../../components/ui/Toggle";
 import Upload from "../../components/Upload";
@@ -9,6 +9,7 @@ import {
   getProjects,
   createProject,
   toggleProjectVisibility,
+  deleteProject,
 } from "../../lib/puter.action";
 import { validateServerUploadBoundary } from "../../lib/constants";
 
@@ -23,7 +24,28 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<DesignItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const isCreatingProjectRef = useRef(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete?.id) return;
+    try {
+      setIsDeleting(true);
+      const success = await deleteProject({
+        id: projectToDelete.id,
+        isPublic: Boolean(projectToDelete.isPublic),
+      });
+      if (success) {
+        setProjects((prev) => prev.filter((p) => p.id !== projectToDelete.id));
+        setProjectToDelete(null);
+      }
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const firstName = userName?.split(" ")[0] || "there";
   const totalProjects = projects.length;
@@ -209,8 +231,19 @@ export default function Dashboard() {
                       checked={Boolean(isPublic)}
                       loading={togglingId === id}
                       onChange={(_, e) => handleToggleVisibility(e, project)}
-                      className="absolute top-3 right-3 z-10"
+                      className="absolute top-3 left-3 z-10"
                     />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProjectToDelete(project);
+                      }}
+                      className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md bg-white/90 hover:bg-white text-zinc-400 hover:text-red-600 flex items-center justify-center transition-all shadow-sm cursor-pointer"
+                      title="Delete project"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                   <div className="card-body">
                     <div>
@@ -263,6 +296,57 @@ export default function Dashboard() {
             </div>
             <div className="modal-body">
               <Upload onComplete={handleUploadComplete} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {projectToDelete && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isDeleting && setProjectToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-xl border border-zinc-200 max-w-[360px] w-full p-5 shadow-xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
+              <Trash2 size={18} />
+            </div>
+            <h3 className="text-base font-semibold text-zinc-900 mb-1">
+              Delete Project
+            </h3>
+            <p className="text-xs text-zinc-500 leading-relaxed mb-5">
+              Are you sure you want to delete{" "}
+              <strong className="text-zinc-800 font-medium">
+                {projectToDelete.name || "this project"}
+              </strong>
+              ? This action will permanently remove the visualization and floor plan.
+            </p>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setProjectToDelete(null)}
+                className="px-3 py-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 rounded-md hover:bg-zinc-100 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteConfirm}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </button>
             </div>
           </div>
         </div>

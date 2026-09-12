@@ -393,3 +393,36 @@ export const toggleProjectVisibility = async ({
     renderedImage: displayRender,
   };
 };
+
+export const deleteProject = async ({
+  id,
+  isPublic,
+}: {
+  id: string;
+  isPublic?: boolean;
+}): Promise<boolean> => {
+  if (!id || !PUTER_WORKER_URL) return false;
+
+  try {
+    const response = await puter.workers.exec(
+      `${PUTER_WORKER_URL}/api/projects/delete`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id, isPublic }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error("Failed to delete project on worker:", await response.text());
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Worker error during delete:", error);
+    return false;
+  }
+};
