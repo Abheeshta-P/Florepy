@@ -2,8 +2,9 @@ import puter from "@heyputer/puter.js";
 import {
   getOrCreateHostingConfig,
   uploadImageToHosting,
+  PUBLIC_HOSTING_DIR,
 } from "./puter.hosting";
-import { isHostedUrl } from "./utils";
+import { isHostedUrl, getHostedUrl } from "./utils";
 import { PUTER_WORKER_URL } from "./constants";
 
 export const signIn = async () => await puter.auth.signIn();
@@ -32,8 +33,8 @@ export const createProject = async ({
 
   const projectId = item.id;
 
-  // Always use hosting config so image URLs are permanent and never expire with token errors
-  const hosting = await getOrCreateHostingConfig();
+  // Only use public hosting config if project is marked public
+  const hosting = visibility === "public" ? await getOrCreateHostingConfig() : null;
 
   // host
   const hostedSource = projectId
@@ -131,6 +132,35 @@ const normalizeProject = (p: DesignItem): DesignItem => {
   };
 };
 
+// Helper to resolve private filesystem paths into displayable local blob URLs
+export const resolveDisplayUrl = async (
+  url: string | null | undefined
+): Promise<string | null> => {
+  if (!url) return null;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:") ||
+    url.startsWith("blob:")
+  ) {
+    return url;
+  }
+
+  // It is a private Puter FS path (e.g. project/123/source.png)
+  if (typeof window !== "undefined" && (window as any).puter?.fs) {
+    try {
+      const blob = await (window as any).puter.fs.read(url);
+      if (blob && blob.size > 0) {
+        return URL.createObjectURL(blob);
+      }
+    } catch (err) {
+      console.warn("Could not load private Puter FS file:", url, err);
+    }
+  }
+
+  return url;
+};
+
 // from BE/worker in puter
 export const getProjects = async () => {
   if (!PUTER_WORKER_URL) {
@@ -152,7 +182,20 @@ export const getProjects = async () => {
     const data = (await response.json()) as { projects?: DesignItem[] | null };
     const rawProjects = Array.isArray(data?.projects) ? data.projects : [];
 
-    return rawProjects.map(normalizeProject);
+    const mapped = await Promise.all(
+      rawProjects.map(async (raw) => {
+        const p = normalizeProject(raw);
+        const sourceImage = (await resolveDisplayUrl(p.sourceImage)) || p.sourceImage;
+        const renderedImage = (await resolveDisplayUrl(p.renderedImage)) || p.renderedImage;
+        return {
+          ...p,
+          sourceImage,
+          renderedImage,
+        };
+      })
+    );
+
+    return mapped;
   } catch (error) {
     console.error("Failed to get projects", error);
     return [];
@@ -164,8 +207,6 @@ export const getProjectById = async ({ id }: { id: string }) => {
     console.warn("Missing VITE_PUTER_WORKER_URL; skipping project fetch.");
     return null;
   }
-
-  console.log("Fetching project with ID:", id);
 
   try {
     const response = await puter.workers.exec(
@@ -189,7 +230,15 @@ export const getProjectById = async ({ id }: { id: string }) => {
     const project = data?.project ?? null;
     if (!project) return null;
 
-    return normalizeProject(project);
+    const p = normalizeProject(project);
+    const sourceImage = (await resolveDisplayUrl(p.sourceImage)) || p.sourceImage;
+    const renderedImage = (await resolveDisplayUrl(p.renderedImage)) || p.renderedImage;
+
+    return {
+      ...p,
+      sourceImage,
+      renderedImage,
+    };
   } catch (error) {
     console.error("Failed to fetch project:", error);
     return null;
@@ -205,11 +254,55 @@ export const toggleProjectVisibility = async ({
 }): Promise<DesignItem | null> => {
   if (!project?.id) return null;
 
-  const visibility = isPublic ? "public" : "private";
+  const projectId = project.id;
+  const visibility: "public" | "private" = isPublic ? "public" : "private";
+
+  let publicSource = project.sourceImage;
+  let publicRender = project.renderedImage;
+
+  if (isPublic) {
+    // 1. PUBLISH: Copy files from private vault into public/project/{projectId}/
+    const hosting = await getOrCreateHostingConfig();
+    if (hosting?.subdomain) {
+      const publicDir = `${PUBLIC_HOSTING_DIR}/project/${projectId}`;
+      await puter.fs.mkdir(publicDir, { createMissingParents: true }).catch(() => {});
+
+      const exts = ["png", "jpg", "jpeg", "webp"];
+      for (const ext of exts) {
+        try {
+          const blob = await puter.fs.read(`project/${projectId}/source.${ext}`);
+          if (blob && blob.size > 0) {
+            await puter.fs.write(`${publicDir}/source.${ext}`, blob);
+            publicSource = getHostedUrl({ subdomain: hosting.subdomain }, `project/${projectId}/source.${ext}`) || publicSource;
+            break;
+          }
+        } catch {}
+      }
+
+      for (const ext of exts) {
+        try {
+          const blob = await puter.fs.read(`project/${projectId}/rendered.${ext}`);
+          if (blob && blob.size > 0) {
+            await puter.fs.write(`${publicDir}/rendered.${ext}`, blob);
+            publicRender = getHostedUrl({ subdomain: hosting.subdomain }, `project/${projectId}/rendered.${ext}`) || publicRender;
+            break;
+          }
+        } catch {}
+      }
+    }
+  } else {
+    // 2. UNPUBLISH: Delete files from public hosting directory
+    await puter.fs.delete(`${PUBLIC_HOSTING_DIR}/project/${projectId}`).catch(() => {});
+    publicSource = `project/${projectId}/source.png`;
+    publicRender = project.renderedImage ? `project/${projectId}/rendered.png` : undefined;
+  }
+
   const updatedItem: DesignItem = {
     ...project,
     isPublic,
     visibility,
+    sourceImage: publicSource,
+    renderedImage: publicRender,
   };
 
   // 1. Direct KV update on user's puter to ensure immediate consistency
@@ -230,5 +323,14 @@ export const toggleProjectVisibility = async ({
     visibility,
   });
 
-  return saved ?? updatedItem;
+  const displaySource = (await resolveDisplayUrl(updatedItem.sourceImage)) || updatedItem.sourceImage;
+  const displayRender = (await resolveDisplayUrl(updatedItem.renderedImage)) || updatedItem.renderedImage;
+
+  return {
+    ...(saved ?? updatedItem),
+    isPublic,
+    visibility,
+    sourceImage: displaySource,
+    renderedImage: displayRender,
+  };
 };
