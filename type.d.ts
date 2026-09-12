@@ -23,9 +23,10 @@ interface DesignItem {
   publicPath?: string | null;
   timestamp: number;
   ownerId?: string | null;
-  sharedBy?: string | null;
+  ownerName?: string | null;
   sharedAt?: string | null;
   isPublic?: boolean;
+  isOwner?: boolean;
 }
 
 interface DesignConfig {
@@ -51,7 +52,7 @@ type VisualizerLocationState = {
   initialRender?: string | null;
   ownerId?: string | null;
   name?: string | null;
-  sharedBy?: string | null;
+  ownerName?: string | null;
 };
 
 interface VisualizerProps {
@@ -64,7 +65,7 @@ interface VisualizerProps {
   projectId?: string;
   initialRender?: string | null;
   isPublic?: boolean;
-  sharedBy?: string | null;
+  ownerName?: string | null;
   canUnshare?: boolean;
 }
 
@@ -116,12 +117,13 @@ interface StoreHostedImageParams {
   url: string;
   projectId: string;
   label: "source" | "rendered";
-  visibility?: "private" | "public";
+  isPublic?: boolean;
 }
 
 interface CreateProjectParams {
   item: DesignItem;
-  visibility?: "private" | "public";
+  isPublic?: boolean;
+  isUpdate?: boolean;
 }
 
 interface Generate3DViewParams {

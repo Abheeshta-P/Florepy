@@ -13,14 +13,38 @@ import {
 type HostingConfig = { subdomain: string };
 type HostedAsset = { url: string };
 
+export const PUBLIC_HOSTING_DIR = "public";
+
 export const getOrCreateHostingConfig =
   async (): Promise<HostingConfig | null> => {
     try {
+      // Ensure the dedicated public hosting directory exists
+      await puter.fs.mkdir(PUBLIC_HOSTING_DIR, { createMissingParents: true }).catch(() => {});
+
       const existing = (await puter.kv.get(
         HOSTING_CONFIG_KEY,
       )) as HostingConfig | null;
-      if (existing?.subdomain) return { subdomain: existing.subdomain };
+      if (existing?.subdomain) {
+        // Ensure the subdomain is mounted strictly to the public directory
+        await puter.hosting.update(existing.subdomain, PUBLIC_HOSTING_DIR).catch(() => {});
+        return { subdomain: existing.subdomain };
+      }
 
+      // Check if a florepy hosting site already exists but not stored in KV without prompting permissions
+      try {
+        const hostedSites = (await puter.hosting.list()) as Array<{ subdomain: string }>;
+        const found = hostedSites?.find((s) => s.subdomain?.startsWith("florepy-"));
+        if (found?.subdomain) {
+          await puter.hosting.update(found.subdomain, PUBLIC_HOSTING_DIR).catch(() => {});
+          const record: HostingConfig = { subdomain: found.subdomain };
+          await puter.kv.set(HOSTING_CONFIG_KEY, record).catch(() => {});
+          return record;
+        }
+      } catch {
+        // Continue if listing fails
+      }
+
+      // CREATE subdomain if it is neither in KV nor in list
       const subdomain = createHostingSlug();
       
       const hasPerms = await puter.perms.requestManageSubdomains();
@@ -29,7 +53,8 @@ export const getOrCreateHostingConfig =
         return null;
       }
       
-      const created = await puter.hosting.create(subdomain, ".");
+      // Mount hosting strictly to the "public" directory
+      const created = await puter.hosting.create(subdomain, PUBLIC_HOSTING_DIR);
 
       const record: HostingConfig = { subdomain: created.subdomain };
       await puter.kv.set(HOSTING_CONFIG_KEY, record);
@@ -46,10 +71,10 @@ export const uploadImageToHosting = async ({
   url,
   projectId,
   label,
-  visibility,
+  isPublic = false,
 }: StoreHostedImageParams): Promise<HostedAsset | null> => {
   if (!url) return null;
-  if (visibility !== "private" && !hosting) return null;
+  if (isPublic && !hosting) return null;
 
   if (isHostedUrl(url)) return { url };
 
@@ -65,26 +90,33 @@ export const uploadImageToHosting = async ({
 
     const contentType = resolved.contentType || resolved.blob.type || "";
     const ext = getImageExtension(contentType, url);
-    const dir = `project/${projectId}`;
-    const filePath = `${dir}/${label}.${ext}`;
+
+    // 1. Always save the primary master copy in private vault: project/{projectId}/{label}.{ext}
+    const privateDir = `project/${projectId}`;
+    const privateFilePath = `${privateDir}/${label}.${ext}`;
 
     const uploadFile = new File([resolved.blob], `${label}.${ext}`, {
       type: contentType,
     });
 
-    await puter.fs.mkdir(dir, { createMissingParents: true });
-    await puter.fs.write(filePath, uploadFile);
+    await puter.fs.mkdir(privateDir, { createMissingParents: true });
+    await puter.fs.write(privateFilePath, uploadFile);
 
-    if (visibility === "private" || !hosting) {
-      const privateUrl = await puter.fs.getReadURL(filePath);
-      return { url: privateUrl };
+    // 2. If PUBLIC, copy into the public hosting folder: public/project/{projectId}/{label}.{ext}
+    if (isPublic && hosting) {
+      const publicDir = `${PUBLIC_HOSTING_DIR}/project/${projectId}`;
+      const publicFilePath = `${publicDir}/${label}.${ext}`;
+      await puter.fs.mkdir(publicDir, { createMissingParents: true });
+      await puter.fs.write(publicFilePath, uploadFile);
+
+      const hostedUrl = getHostedUrl({ subdomain: hosting.subdomain }, `project/${projectId}/${label}.${ext}`);
+      if (hostedUrl) return { url: hostedUrl };
     }
 
-    const hostedUrl = getHostedUrl({ subdomain: hosting.subdomain }, filePath);
-
-    return hostedUrl ? { url: hostedUrl } : null;
+    // 3. If PRIVATE, return the private filesystem path (NEVER published to web)
+    return { url: privateFilePath };
   } catch (error) {
-    console.warn(`Failed to store the hosted image: ${error}`);
+    console.warn(`Failed to store image: ${error}`);
     return null;
   }
 };

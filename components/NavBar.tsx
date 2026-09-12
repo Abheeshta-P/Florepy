@@ -38,11 +38,6 @@ function NavBar() {
             <a href="/#hero">Home</a>
             <a href="/#upload">Upload</a>
             <Link to="/community">Community</Link>
-            {isAuthLoading ? (
-              <div className="w-20 h-4 bg-zinc-200 animate-pulse rounded mx-2"></div>
-            ) : isSignedIn ? (
-              <Link to="/dashboard">Dashboard</Link>
-            ) : null}
           </ul>
         </div>
         <div className="actions">
@@ -54,16 +49,17 @@ function NavBar() {
           ) : isSignedIn ? (
             <>
               <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold border border-primary/20"
-                  title={userName ? `Signed in as ${userName}` : "Signed in"}
+                <Link
+                  to="/dashboard"
+                  className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold border border-primary/20 hover:bg-primary/20 hover:border-primary/40 transition-all cursor-pointer"
+                  title={userName ? `Dashboard (${userName})` : "Dashboard"}
                 >
                   {userName ? userName.charAt(0).toUpperCase() : <User size={14} />}
-                </div>
+                </Link>
                 
                 <button 
                   onClick={handleAuthClick} 
-                  className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
                   title="Log Out"
                 >
                   <LogOut size={16} />

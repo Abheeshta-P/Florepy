@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router"; import { useAuth } from "../../components/AuthProvider";
+import { useNavigate, useParams } from "react-router";
+import puter from "@heyputer/puter.js";
+import { useAuth } from "../../components/AuthProvider";
 import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
-import { Download, RefreshCcw, Share2, X } from "lucide-react";
-import { createProject, getProjectById } from "../../lib/puter.action";
+import Modal from "../../components/ui/Modal";
+import { Check, Copy, Download, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
+import { createProject, getProjectById, toggleProjectPublic } from "../../lib/puter.action";
 import {
   ReactCompareSlider,
   ReactCompareSliderImage,
@@ -20,7 +23,7 @@ export function meta() {
 function VisualizerId() {
   // which user which id
   const { id } = useParams();
-  const { userId } = useAuth();
+  const { userId, userName } = useAuth();
 
   const navigate = useNavigate();
 
@@ -32,14 +35,107 @@ function VisualizerId() {
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [project, setProject] = useState<DesignItem | null>(null);
   const [isProjectLoading, setIsProjectLoading] = useState(true);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const isOwner =
+    project?.isOwner !== undefined
+      ? Boolean(project.isOwner)
+      : Boolean(
+          (userId && project?.ownerId && userId === project.ownerId) ||
+          (userName &&
+            project?.ownerName &&
+            userName.toLowerCase() === project.ownerName.toLowerCase())
+        );
 
   const handleBack = () => navigate("/");
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+    }
+  };
+
+  const handleShareClick = () => {
+    if (!isOwner) return;
+    setShowShareModal(true);
+  };
+
+  const handleConfirmShare = async () => {
+    if (!project || !isOwner) return;
+    try {
+      setIsSharing(true);
+      const updated = await toggleProjectPublic({
+        project,
+        isPublic: true,
+      });
+      if (updated) {
+        setProject(updated);
+      }
+      await copyShareLink();
+    } catch (err) {
+      console.error("Failed to publish and share project:", err);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleMakePrivate = async () => {
+    if (!project || !isOwner) return;
+    try {
+      setIsSharing(true);
+      const updated = await toggleProjectPublic({
+        project,
+        isPublic: false,
+      });
+      if (updated) {
+        setProject(updated);
+      }
+    } catch (err) {
+      console.error("Failed to unpublish project:", err);
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   const handleExport = async () => {
     if (!currentImage) return;
 
     try {
-      const data = await fetchBlobFromUrl(currentImage);
+      let data = await fetchBlobFromUrl(currentImage);
+
+      // Fallback: if fetch failed (e.g. Puter read token expired), read directly from puter.fs
+      if (!data && id) {
+        try {
+          const candidatePaths = [
+            `project/${id}/rendered.png`,
+            `project/${id}/rendered.jpg`,
+            `project/${id}/rendered.jpeg`,
+            `project/${id}/source.png`,
+            `project/${id}/source.jpg`,
+            `project/${id}/source.jpeg`,
+          ];
+          for (const filePath of candidatePaths) {
+            try {
+              const blob = await puter.fs.read(filePath);
+              if (blob && blob.size > 0) {
+                data = { blob, contentType: blob.type || "image/png" };
+                break;
+              }
+            } catch {
+              // try next path
+            }
+          }
+        } catch (fsErr) {
+          console.warn("Direct Puter FS read fallback failed:", fsErr);
+        }
+      }
+
       if (!data) throw new Error("Failed to fetch image blob");
 
       const ext = getImageExtension(data.contentType, currentImage) || "png";
@@ -53,12 +149,6 @@ function VisualizerId() {
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Failed to export image:", error);
-      const link = document.createElement("a");
-      link.href = currentImage;
-      link.download = `${project?.name || `Residence-${id || "render"}`}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     }
   };
 
@@ -72,6 +162,9 @@ function VisualizerId() {
       if (result.renderedImage) {
         setCurrentImage(result.renderedImage);
 
+        // Preserve current public state instead of downgrading
+        const isProjectPublic = Boolean(item.isPublic);
+
         // put this image in the kv of the project which is already present
         const updatedItem: DesignItem = {
           ...item,
@@ -79,12 +172,13 @@ function VisualizerId() {
           renderedPath: result.renderedPath,
           timestamp: Date.now(),
           ownerId: item.ownerId ?? userId ?? null,
-          isPublic: item.isPublic ?? false,
+          ownerName: item.ownerName ?? userName ?? null,
+          isPublic: isProjectPublic,
         };
 
         const saved = await createProject({
           item: updatedItem,
-          visibility: "private",
+          isPublic: isProjectPublic,
         });
 
         if (saved) {
@@ -161,7 +255,7 @@ function VisualizerId() {
                 <div className="h-9 bg-zinc-200 rounded w-24"></div>
               </div>
             </div>
-            <div className="render-area bg-zinc-200/50 min-h-[500px]"></div>
+            <div className="render-area bg-zinc-200/50 min-h-125"></div>
           </div>
         ) : (
           <div className="panel shadow-sm">
@@ -169,7 +263,9 @@ function VisualizerId() {
               <div className="panel-meta">
                 <p>Project</p>
                 <h2>{project?.name || `Residence ${id}`}</h2>
-                <p className="note">Created by you &bull; Drag slider to compare</p>
+                <p className="note">
+                  Created by {isOwner ? "you" : (project?.ownerName || "Community Member")} &bull; Drag slider to compare
+                </p>
               </div>
               <div className="panel-actions">
                 <Button
@@ -180,17 +276,36 @@ function VisualizerId() {
                 >
                   <Download className="w-4 h-4 mr-2" /> Export
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {}}
-                  className="share"
-                  disabled={!currentImage}
-                >
-                  <Share2 className="w-4 h-4 mr-2" /> Share
-                </Button>
+                {isOwner ? (
+                  <Button
+                    size="sm"
+                    onClick={handleShareClick}
+                    className="share cursor-pointer"
+                    disabled={!currentImage || isSharing}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" /> Share
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={copyShareLink}
+                    className="share cursor-pointer"
+                    disabled={!currentImage}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2 text-emerald-500" /> Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-2" /> Copy Link
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
-            <div className={`render-area ${isProcessing ? "is-processing" : ""} min-h-[500px]`}>
+            <div className={`render-area ${isProcessing ? "is-processing" : ""} min-h-125`}>
               {currentImage && project?.sourceImage && !isProcessing ? (
                 <ReactCompareSlider
                   defaultValue={50}
@@ -241,6 +356,95 @@ function VisualizerId() {
           </div>
         )}
       </section>
+
+      {/* Share Modal */}
+      <Modal
+        isOpen={showShareModal && isOwner}
+        onClose={() => setShowShareModal(false)}
+        title="Share Project"
+        disabled={isSharing}
+        maxWidth="sm"
+      >
+        {project?.isPublic ? (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-500 leading-normal">
+              Anyone with this link can view the visualization.
+            </p>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                readOnly
+                value={typeof window !== "undefined" ? window.location.href : ""}
+                className="w-full text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-1.5 text-zinc-700 select-all outline-none truncate"
+              />
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-900 text-white hover:bg-black transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                {copied ? (
+                  <>
+                    <Check size={12} className="text-emerald-400" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={12} /> Copy
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-400">
+              <span className="flex items-center gap-1.5 text-zinc-500 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Public to anyone
+              </span>
+              <button
+                type="button"
+                onClick={handleMakePrivate}
+                disabled={isSharing}
+                className="hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Make Private
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="bg-zinc-50 border border-zinc-200/80 rounded-lg p-2.5 flex items-start gap-2.5">
+              <div className="w-7 h-7 rounded-md bg-zinc-200/70 text-zinc-600 flex items-center justify-center shrink-0 mt-0.5">
+                <Lock size={13} />
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-zinc-900">Private Project</h4>
+                <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                  Only you can view this visualization. Publish it to generate a public share link.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end items-center pt-1">
+              <button
+                type="button"
+                onClick={handleConfirmShare}
+                disabled={isSharing}
+                className="text-xs font-medium text-white bg-zinc-900 hover:bg-black px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {isSharing ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" /> Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Globe size={12} /> Publish &amp; Copy
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

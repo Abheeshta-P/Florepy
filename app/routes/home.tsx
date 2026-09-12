@@ -2,10 +2,13 @@ import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
+import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
 import { Link, useNavigate } from "react-router";
-import { validateServerUploadBoundary } from "../../lib/constants";
 import { useEffect, useRef, useState } from "react";
-import { createProject, getProjects } from "../../lib/puter.action";
+import { validateServerUploadBoundary } from "../../lib/constants";
+import { createProject, getCommunityProjects } from "../../lib/puter.action";
+import { useAuth } from "../../components/AuthProvider";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -52,12 +55,18 @@ export function meta({}: Route.MetaArgs) {
 
 export default function Home() {
   const navigate = useNavigate();
+  const { isSignedIn, signIn, userName, userId } = useAuth();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const isCreatingProjectRef = useRef(false);
 
   const handleUploadComplete = async (base64Image: string) => {
     try {
+      if (!isSignedIn) {
+        const loggedIn = await signIn();
+        if (!loggedIn) return false;
+      }
+
       if (isCreatingProjectRef.current) return false;
       isCreatingProjectRef.current = true;
 
@@ -79,11 +88,14 @@ export default function Home() {
         sourceImage: base64Image,
         renderedImage: undefined,
         timestamp: Date.now(),
+        ownerId: userId ?? null,
+        ownerName: userName ?? null,
+        isPublic: false,
       };
 
       const saved = await createProject({
         item: newItem,
-        visibility: "private",
+        isPublic: false,
       });
 
       if (!saved) {
@@ -109,7 +121,7 @@ export default function Home() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const items = await getProjects();
+        const items = await getCommunityProjects();
         setProjects(items);
       } finally {
         setIsLoading(false);
@@ -171,29 +183,21 @@ export default function Home() {
             </div>
           </div>
           {isLoading ? (
-            <div className="projects-grid">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="project-card animate-pulse border border-zinc-100 bg-white shadow-sm overflow-hidden flex flex-col h-full"
-                >
-                  <div className="preview aspect-4/3 bg-zinc-200 w-full relative"></div>
-                  <div className="card-body p-4 flex justify-between items-end flex-grow border-t border-zinc-100">
-                    <div className="w-full">
-                      <div className="h-5 bg-zinc-200 rounded w-2/3 mb-3"></div>
-                      <div className="h-4 bg-zinc-200 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ProjectSkeleton count={3} />
           ) : projects.length > 0 ? (
             <>
               <div className="projects-grid">
                 {projects
                   .slice(0, 6)
                   .map(
-                    ({ id, name, renderedImage, sourceImage, timestamp }) => (
+                    ({
+                      id,
+                      name,
+                      renderedImage,
+                      sourceImage,
+                      timestamp,
+                      ownerName,
+                    }) => (
                       <div
                         className="project-card group"
                         key={id}
@@ -213,11 +217,13 @@ export default function Home() {
                               <span>
                                 {new Date(timestamp).toLocaleDateString()}
                               </span>
-                              <span>By SS</span>
+                              <span>
+                                {ownerName ? `By ${ownerName}` : "By Community Member"}
+                              </span>
                             </div>
                           </div>
                           <div className="arrow">
-                            <ArrowRight size={18} />
+                            <ArrowRight size={20} />
                           </div>
                         </div>
                       </div>
@@ -234,19 +240,12 @@ export default function Home() {
               </div>
             </>
           ) : (
-            <div className="empty-projects-state">
-              <div className="empty-icon-wrap">
-                <FolderPlus className="empty-icon" size={26} />
-              </div>
-              <h3>No community projects yet</h3>
-              <p>
-                Be the first to share your architectural visualization with the
-                community.
-              </p>
-              <a href="#upload" className="empty-cta">
-                Upload Floor Plan <ArrowRight size={14} className="icon" />
-              </a>
-            </div>
+            <EmptyState
+              title="No community projects yet"
+              description="Be the first to share your architectural visualization with the community."
+              actionText="Upload Floor Plan"
+              actionHref="#upload"
+            />
           )}
         </div>
       </section>

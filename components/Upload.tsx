@@ -26,7 +26,13 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
 
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, signIn } = useAuth();
+
+  const handleDropzoneClick = () => {
+    if (!isSignedIn) {
+      void signIn();
+    }
+  };
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +78,11 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
   }, [progress]);
 
   const processFile = (selectedFile: File | null | undefined) => {
-    if (!isSignedIn || !selectedFile) return;
+    if (!isSignedIn) {
+      void signIn();
+      return;
+    }
+    if (!selectedFile) return;
     const isValidType =
       ALLOWED_IMAGE_TYPES.includes(selectedFile.type) ||
       ALLOWED_FILE_EXTENSIONS.some((ext) => selectedFile.name.toLowerCase().endsWith(ext));
@@ -152,7 +162,10 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      void signIn();
+      return;
+    }
 
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
@@ -161,7 +174,10 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      void signIn();
+      return;
+    }
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       processFile(selectedFile);
@@ -172,27 +188,31 @@ const Upload: React.FC<UploadProps> = ({ onComplete }) => {
     <div className='upload'>
       {!file ? (
         <div
-          className={`dropzone ${isDragging ? 'is-dragging' : ''}`}
+          className={`dropzone ${isDragging ? 'is-dragging' : ''} ${!isSignedIn ? 'cursor-pointer' : ''}`}
+          onClick={handleDropzoneClick}
           onDragOver={handleDragOver}
           onDragEnter={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <input
-            type="file"
-            className="drop-input"
-            disabled={!isSignedIn}
-            accept=".jpg,.jpeg,.png,.webp,.svg,image/svg+xml"
-            onChange={handleFileChange}
-          />
+          {isSignedIn ? (
+            <input
+              type="file"
+              className="drop-input"
+              accept=".jpg,.jpeg,.png,.webp,.svg,image/svg+xml"
+              onChange={handleFileChange}
+            />
+          ) : null}
           <div className="drop-content">
             <div className="drop-icon">
               <UploadIcon size={20}/>
             </div>
             <p>
-              {isSignedIn ? ("Click to upload or just drag and drop") : ("Signin or Signup with puter to upload")}
+              {isSignedIn ? ("Click to upload or just drag and drop") : ("Sign in to upload a floor plan")}
             </p>
-            <p className="help">Supports JPG, PNG, WEBP & SVG up to 10MB.</p>
+            <p className="help">
+              {isSignedIn ? "Supports JPG, PNG, WEBP & SVG up to 10MB." : "Click here to log in or create an account."}
+            </p>
             {error && <p className="text-red-500 text-xs font-semibold mt-2">{error}</p>}
           </div>
         </div>) : (
