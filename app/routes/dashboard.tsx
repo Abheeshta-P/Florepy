@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Clock, FolderPlus, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, Clock, Copy, FolderPlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Toggle from "../../components/ui/Toggle";
+import Modal from "../../components/ui/Modal";
+import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import Upload from "../../components/Upload";
 import { useAuth } from "../../components/AuthProvider";
 import {
@@ -25,11 +27,34 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<DesignItem | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [copiedName, setCopiedName] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const isCreatingProjectRef = useRef(false);
 
+  const targetDeleteName = projectToDelete?.name || (projectToDelete?.id ? `Residence ${projectToDelete.id}` : "");
+  const isDeleteNameMatching = deleteConfirmText.trim() === targetDeleteName.trim() && targetDeleteName.length > 0;
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setProjectToDelete(null);
+    setDeleteConfirmText("");
+    setCopiedName(false);
+  };
+
+  const handleCopyProjectName = async () => {
+    if (!targetDeleteName) return;
+    try {
+      await navigator.clipboard.writeText(targetDeleteName);
+      setCopiedName(true);
+      setTimeout(() => setCopiedName(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy project name:", err);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
-    if (!projectToDelete?.id) return;
+    if (!projectToDelete?.id || !isDeleteNameMatching) return;
     try {
       setIsDeleting(true);
       const success = await deleteProject({
@@ -38,7 +63,7 @@ export default function Dashboard() {
       });
       if (success) {
         setProjects((prev) => prev.filter((p) => p.id !== projectToDelete.id));
-        setProjectToDelete(null);
+        closeDeleteModal();
       }
     } catch (err) {
       console.error("Failed to delete project:", err);
@@ -189,22 +214,7 @@ export default function Dashboard() {
         </div>
 
         {isLoading ? (
-          <div className="projects-grid">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="project-card animate-pulse border border-zinc-100 bg-white shadow-sm overflow-hidden flex flex-col h-full"
-              >
-                <div className="preview aspect-4/3 bg-zinc-200 w-full relative" />
-                <div className="card-body p-4 flex justify-between items-end flex-grow border-t border-zinc-100">
-                  <div className="w-full">
-                    <div className="h-5 bg-zinc-200 rounded w-2/3 mb-3" />
-                    <div className="h-4 bg-zinc-200 rounded w-1/2" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ProjectSkeleton count={3} />
         ) : projects.length > 0 ? (
           <div className="projects-grid">
             {projects.map((project) => {
@@ -237,6 +247,8 @@ export default function Dashboard() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setDeleteConfirmText("");
+                        setCopiedName(false);
                         setProjectToDelete(project);
                       }}
                       className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md bg-white/90 hover:bg-white text-zinc-400 hover:text-red-600 flex items-center justify-center transition-all shadow-sm cursor-pointer"
@@ -279,78 +291,78 @@ export default function Dashboard() {
       </div>
 
       {/* New Project Modal */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <p className="modal-label">New Project</p>
-                <h3 className="modal-title">Upload a floor plan</h3>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="modal-close cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <Upload onComplete={handleUploadComplete} />
-            </div>
-          </div>
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Upload a floor plan"
+        description="New Project"
+        maxWidth="lg"
+      >
+        <div className="pt-1">
+          <Upload onComplete={handleUploadComplete} />
         </div>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      {projectToDelete && (
-        <div
-          className="modal-overlay"
-          onClick={() => !isDeleting && setProjectToDelete(null)}
-        >
-          <div
-            className="bg-white rounded-xl border border-zinc-200 max-w-[360px] w-full p-5 shadow-xl relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
-              <Trash2 size={18} />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900 mb-1">
-              Delete Project
-            </h3>
-            <p className="text-xs text-zinc-500 leading-relaxed mb-5">
-              Are you sure you want to delete{" "}
-              <strong className="text-zinc-800 font-medium">
-                {projectToDelete.name || "this project"}
-              </strong>
-              ? This action will permanently remove the visualization and floor plan.
-            </p>
-            <div className="flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={() => setProjectToDelete(null)}
-                className="px-3 py-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 rounded-md hover:bg-zinc-100 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleDeleteConfirm}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" /> Deleting...
-                  </>
-                ) : (
-                  "Delete"
-                )}
-              </button>
-            </div>
-          </div>
+      <Modal
+        isOpen={Boolean(projectToDelete)}
+        onClose={closeDeleteModal}
+        disabled={isDeleting}
+        maxWidth="sm"
+        showCloseButton={!isDeleting}
+        title="Delete Project"
+      >
+        <p className="text-xs text-zinc-500 leading-relaxed mb-3">
+          This action cannot be undone. This will permanently delete the visualization and floor plan.
+        </p>
+
+        {/* Confirmation text input with inline project name & copy button */}
+        <div className="mb-4">
+          <p className="text-xs text-zinc-600 mb-2 leading-relaxed">
+            Type <strong className="font-semibold text-zinc-900">{targetDeleteName}</strong>{" "}
+            <button
+              type="button"
+              onClick={handleCopyProjectName}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-900 px-1.5 py-0.5 rounded hover:bg-zinc-100 border border-zinc-200 transition-colors cursor-pointer align-middle mx-1"
+              title="Copy project name"
+            >
+              {copiedName ? (
+                  <Check size={11} className="text-emerald-500" />
+              ) : (
+                  <Copy size={11} />
+              )}
+            </button>{" "}
+            to confirm:
+          </p>
+          <input
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            placeholder={targetDeleteName}
+            disabled={isDeleting}
+            autoFocus
+            className="w-full text-xs bg-white border border-zinc-200 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-md px-2.5 py-2 text-zinc-900 outline-none transition-colors"
+          />
         </div>
-      )}
+
+        {/* Modal actions */}
+        <div className="flex items-center justify-end pt-2 border-t border-zinc-100">
+          <button
+            type="button"
+            disabled={isDeleting || !isDeleteNameMatching}
+            onClick={handleDeleteConfirm}
+            className="px-3.5 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 size={12} className="animate-spin" /> Deleting...
+              </>
+            ) : (
+              "Delete Project"
+            )}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -697,10 +697,10 @@
     }
 
     .modal-overlay {
-        @apply fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4;
+        @apply fixed inset-0 z-100 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4;
 
         .modal-card {
-            @apply bg-white rounded-2xl border border-zinc-200 max-w-lg w-full p-6 shadow-xl relative;
+            @apply bg-white rounded-2xl border border-zinc-200 max-w-lg w-full p-6 relative;
 
             .modal-header {
                 @apply flex items-center justify-between mb-6 pb-4 border-b border-zinc-100;
