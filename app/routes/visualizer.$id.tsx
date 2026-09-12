@@ -38,6 +38,16 @@ function VisualizerId() {
   const [isSharing, setIsSharing] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const isOwner =
+    project?.isOwner !== undefined
+      ? Boolean(project.isOwner)
+      : Boolean(
+          (userId && project?.ownerId && userId === project.ownerId) ||
+          (userName &&
+            project?.ownerName &&
+            userName.toLowerCase() === project.ownerName.toLowerCase())
+        );
+
   const handleBack = () => navigate("/");
 
   const copyShareLink = async () => {
@@ -51,11 +61,12 @@ function VisualizerId() {
   };
 
   const handleShareClick = () => {
+    if (!isOwner) return;
     setShowShareModal(true);
   };
 
   const handleConfirmShare = async () => {
-    if (!project) return;
+    if (!project || !isOwner) return;
     try {
       setIsSharing(true);
       const updated = await toggleProjectVisibility({
@@ -74,7 +85,7 @@ function VisualizerId() {
   };
 
   const handleMakePrivate = async () => {
-    if (!project) return;
+    if (!project || !isOwner) return;
     try {
       setIsSharing(true);
       const updated = await toggleProjectVisibility({
@@ -160,7 +171,7 @@ function VisualizerId() {
           renderedPath: result.renderedPath,
           timestamp: Date.now(),
           ownerId: item.ownerId ?? userId ?? null,
-          sharedBy: item.sharedBy ?? userName ?? null,
+          ownerName: item.ownerName ?? userName ?? null,
           isPublic: currentVisibility === "public",
           visibility: currentVisibility,
         };
@@ -252,7 +263,9 @@ function VisualizerId() {
               <div className="panel-meta">
                 <p>Project</p>
                 <h2>{project?.name || `Residence ${id}`}</h2>
-                <p className="note">Created by you &bull; Drag slider to compare</p>
+                <p className="note">
+                  Created by {isOwner ? "you" : (project?.ownerName || "Community Member")} &bull; Drag slider to compare
+                </p>
               </div>
               <div className="panel-actions">
                 <Button
@@ -263,14 +276,33 @@ function VisualizerId() {
                 >
                   <Download className="w-4 h-4 mr-2" /> Export
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleShareClick}
-                  className="share cursor-pointer"
-                  disabled={!currentImage || isSharing}
-                >
-                  <Share2 className="w-4 h-4 mr-2" /> Share
-                </Button>
+                {isOwner ? (
+                  <Button
+                    size="sm"
+                    onClick={handleShareClick}
+                    className="share cursor-pointer"
+                    disabled={!currentImage || isSharing}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" /> Share
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={copyShareLink}
+                    className="share cursor-pointer"
+                    disabled={!currentImage}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2 text-emerald-500" /> Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-2" /> Copy Link
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
             <div className={`render-area ${isProcessing ? "is-processing" : ""} min-h-[500px]`}>
@@ -326,7 +358,7 @@ function VisualizerId() {
       </section>
 
       {/* Ultra-Compact Share Modal */}
-      {showShareModal && (
+      {showShareModal && isOwner && (
         <div className="modal-overlay" onClick={() => !isSharing && setShowShareModal(false)}>
           <div className="bg-white rounded-xl border border-zinc-200/90 max-w-[360px] w-full p-4 shadow-xl relative" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-zinc-100">

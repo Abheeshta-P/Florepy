@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowRight, Clock, Globe } from "lucide-react";
-import { getProjects } from "../../lib/puter.action";
+import { getCommunityProjects } from "../../lib/puter.action";
 
 export function meta() {
   return [
@@ -22,9 +22,8 @@ export default function Community() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const items = await getProjects();
-        // Only show projects that are marked public
-        setProjects(items.filter((p) => Boolean(p.isPublic)));
+        const items = await getCommunityProjects();
+        setProjects(items);
       } finally {
         setIsLoading(false);
       }
@@ -76,7 +75,7 @@ export default function Community() {
                 renderedImage,
                 sourceImage,
                 timestamp,
-                sharedBy,
+                ownerName,
               }) => (
                 <div
                   className="project-card group"
@@ -96,7 +95,7 @@ export default function Community() {
                         <Clock size={12} />
                         <span>{new Date(timestamp).toLocaleDateString()}</span>
                         <span>
-                          {sharedBy ? `By ${sharedBy}` : "By Creator"}
+                          {ownerName ? `By ${ownerName}` : "By Community Member"}
                         </span>
                       </div>
                     </div>

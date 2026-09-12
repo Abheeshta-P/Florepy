@@ -25,6 +25,7 @@ export const getCurrentUser = async () => {
 export const createProject = async ({
   item,
   visibility = "private",
+  isUpdate = false,
 }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
   if (!PUTER_WORKER_URL) {
     console.warn("Missing VITE_PUTER_WORKER_URL; skipping projects save;");
@@ -80,8 +81,14 @@ export const createProject = async ({
     ...rest
   } = item;
 
+  const currentUser = await getCurrentUser();
+  const authorName = item.ownerName || currentUser?.username || undefined;
+  const ownerId = item.ownerId || currentUser?.uuid || undefined;
+
   const payload = {
     ...rest,
+    ownerName: authorName,
+    ownerId,
     sourceImage: resolvedSource,
     renderedImage: resolvedRender,
     visibility,
@@ -100,6 +107,7 @@ export const createProject = async ({
         body: JSON.stringify({
           project: payload,
           visibility,
+          isUpdate,
         }),
       },
     );
@@ -127,6 +135,7 @@ const normalizeProject = (p: DesignItem): DesignItem => {
 
   return {
     ...p,
+    ownerName: p.ownerName || null,
     isPublic,
     visibility: isPublic ? "public" : "private",
   };
@@ -198,6 +207,49 @@ export const getProjects = async () => {
     return mapped;
   } catch (error) {
     console.error("Failed to get projects", error);
+    return [];
+  }
+};
+
+// Fetch shared community projects (Public Feed - accessible to ANY user and guests)
+export const getCommunityProjects = async (): Promise<DesignItem[]> => {
+  if (!PUTER_WORKER_URL) {
+    console.warn("Missing VITE_PUTER_WORKER_URL; skipping community fetch;");
+    return [];
+  }
+
+  try {
+    const response = await puter.workers.exec(
+      `${PUTER_WORKER_URL}/api/projects/community`,
+      { method: "GET" }
+    );
+
+    if (!response.ok) {
+      console.error("Failed to fetch community projects", await response.text());
+      return [];
+    }
+
+    const data = (await response.json()) as { projects?: DesignItem[] | null };
+    const rawProjects = Array.isArray(data?.projects) ? data.projects : [];
+
+    const mapped = await Promise.all(
+      rawProjects.map(async (raw) => {
+        const p = normalizeProject(raw);
+        const sourceImage = (await resolveDisplayUrl(p.sourceImage)) || p.sourceImage;
+        const renderedImage = (await resolveDisplayUrl(p.renderedImage)) || p.renderedImage;
+        return {
+          ...p,
+          sourceImage,
+          renderedImage,
+        };
+      })
+    );
+
+    console.log(mapped)
+
+    return mapped;
+  } catch (error) {
+    console.error("Failed to get community projects", error);
     return [];
   }
 };
@@ -297,8 +349,14 @@ export const toggleProjectVisibility = async ({
     publicRender = project.renderedImage ? `project/${projectId}/rendered.png` : undefined;
   }
 
+  const currentUser = await getCurrentUser();
+  const ownerId = project.ownerId || currentUser?.uuid || undefined;
+  const ownerName = project.ownerName || currentUser?.username || undefined;
+
   const updatedItem: DesignItem = {
     ...project,
+    ownerId,
+    ownerName,
     isPublic,
     visibility,
     sourceImage: publicSource,
@@ -321,6 +379,7 @@ export const toggleProjectVisibility = async ({
   const saved = await createProject({
     item: updatedItem,
     visibility,
+    isUpdate: true,
   });
 
   const displaySource = (await resolveDisplayUrl(updatedItem.sourceImage)) || updatedItem.sourceImage;

@@ -3,9 +3,9 @@ import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
 import { Link, useNavigate } from "react-router";
-import { validateServerUploadBoundary } from "../../lib/constants";
 import { useEffect, useRef, useState } from "react";
-import { createProject, getProjects } from "../../lib/puter.action";
+import { validateServerUploadBoundary } from "../../lib/constants";
+import { createProject, getCommunityProjects } from "../../lib/puter.action";
 import { useAuth } from "../../components/AuthProvider";
 
 export function meta({}: Route.MetaArgs) {
@@ -82,7 +82,7 @@ export default function Home() {
         renderedImage: undefined,
         timestamp: Date.now(),
         ownerId: userId ?? null,
-        sharedBy: userName ?? null,
+        ownerName: userName ?? null,
         isPublic: false,
       };
 
@@ -114,9 +114,8 @@ export default function Home() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const items = await getProjects();
-        // Only show projects that are marked public
-        setProjects(items.filter((p) => Boolean(p.isPublic)));
+        const items = await getCommunityProjects();
+        setProjects(items);
       } finally {
         setIsLoading(false);
       }
@@ -205,7 +204,7 @@ export default function Home() {
                       renderedImage,
                       sourceImage,
                       timestamp,
-                      sharedBy,
+                      ownerName,
                     }) => (
                       <div
                         className="project-card group"
@@ -227,7 +226,7 @@ export default function Home() {
                                 {new Date(timestamp).toLocaleDateString()}
                               </span>
                               <span>
-                                {sharedBy ? `By ${sharedBy}` : "By Creator"}
+                                {ownerName ? `By ${ownerName}` : "By Community Member"}
                               </span>
                             </div>
                           </div>

@@ -66,7 +66,7 @@ export default function Dashboard() {
         renderedImage: undefined,
         timestamp: Date.now(),
         ownerId: userId ?? null,
-        sharedBy: userName ?? null,
+        ownerName: userName ?? null,
         isPublic: false,
       };
 
