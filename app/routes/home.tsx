@@ -3,6 +3,7 @@ import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
 import { Link, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { validateServerUploadBoundary } from "../../lib/constants";
@@ -54,13 +55,18 @@ export function meta({}: Route.MetaArgs) {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { userName, userId } = useAuth();
+  const { isSignedIn, signIn, userName, userId } = useAuth();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const isCreatingProjectRef = useRef(false);
 
   const handleUploadComplete = async (base64Image: string) => {
     try {
+      if (!isSignedIn) {
+        const loggedIn = await signIn();
+        if (!loggedIn) return false;
+      }
+
       if (isCreatingProjectRef.current) return false;
       isCreatingProjectRef.current = true;
 
@@ -234,19 +240,12 @@ export default function Home() {
               </div>
             </>
           ) : (
-            <div className="empty-projects-state">
-              <div className="empty-icon-wrap">
-                <FolderPlus className="empty-icon" size={26} />
-              </div>
-              <h3>No community projects yet</h3>
-              <p>
-                Be the first to share your architectural visualization with the
-                community.
-              </p>
-              <a href="#upload" className="empty-cta">
-                Upload Floor Plan <ArrowRight size={14} className="icon" />
-              </a>
-            </div>
+            <EmptyState
+              title="No community projects yet"
+              description="Be the first to share your architectural visualization with the community."
+              actionText="Upload Floor Plan"
+              actionHref="#upload"
+            />
           )}
         </div>
       </section>

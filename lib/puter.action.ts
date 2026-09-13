@@ -13,10 +13,27 @@ export const signOut = () => puter.auth.signOut();
 
 export const getCurrentUser = async () => {
   try {
+    if (!puter.auth.isSignedIn()) return null;
     return await puter.auth.getUser();
   } catch {
     return null;
   }
+};
+
+/**
+ * Executes a call to the Puter worker endpoint with the user's auth token
+ * attached via `puter-auth`, WITHOUT triggering Puter's login popup when unauthenticated.
+ */
+const callWorker = async (url: string, init?: RequestInit): Promise<Response> => {
+  const headers = new Headers(init?.headers);
+  const token = (puter as any)?.authToken;
+  if (token && !headers.has("puter-auth")) {
+    headers.set("puter-auth", token);
+  }
+  return fetch(url, {
+    ...init,
+    headers,
+  });
 };
 
 // ACTIONS FOR WORKERS
@@ -29,6 +46,11 @@ export const createProject = async ({
 }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
   if (!PUTER_WORKER_URL) {
     console.warn("Missing VITE_PUTER_WORKER_URL; skipping projects save;");
+    return null;
+  }
+
+  if (!puter.auth.isSignedIn()) {
+    console.error("Authentication required: Cannot create project without signing in.");
     return null;
   }
 
@@ -97,7 +119,7 @@ export const createProject = async ({
 
   try {
     // call puter worker to store the project in kv
-    const response = await puter.workers.exec(
+    const response = await callWorker(
       `${PUTER_WORKER_URL}/api/projects/save`,
       {
         method: "POST",
@@ -178,7 +200,7 @@ export const getProjects = async () => {
   }
 
   try {
-    const response = await puter.workers.exec(
+    const response = await callWorker(
       `${PUTER_WORKER_URL}/api/projects/list`,
       { method: "GET" },
     );
@@ -219,7 +241,7 @@ export const getCommunityProjects = async (): Promise<DesignItem[]> => {
   }
 
   try {
-    const response = await puter.workers.exec(
+    const response = await callWorker(
       `${PUTER_WORKER_URL}/api/projects/community`,
       { method: "GET" }
     );
@@ -261,7 +283,7 @@ export const getProjectById = async ({ id }: { id: string }) => {
   }
 
   try {
-    const response = await puter.workers.exec(
+    const response = await callWorker(
       `${PUTER_WORKER_URL}/api/projects/get?id=${encodeURIComponent(id)}`,
       { method: "GET" },
     );
@@ -404,7 +426,7 @@ export const deleteProject = async ({
   if (!id || !PUTER_WORKER_URL) return false;
 
   try {
-    const response = await puter.workers.exec(
+    const response = await callWorker(
       `${PUTER_WORKER_URL}/api/projects/delete`,
       {
         method: "POST",

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Clock, Globe } from "lucide-react";
+import { ArrowRight, Clock, Globe, Plus } from "lucide-react";
 import { getCommunityProjects } from "../../lib/puter.action";
+import { useAuth } from "../../components/AuthProvider";
+import Button from "../../components/ui/Button";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
 
 export function meta() {
   return [
@@ -17,8 +20,17 @@ export function meta() {
 
 export default function Community() {
   const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleCreateProject = () => {
+    if (isSignedIn) {
+      navigate("/dashboard", { state: { openUpload: true } });
+    } else {
+      navigate("/#upload");
+    }
+  };
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -94,19 +106,12 @@ export default function Community() {
             )}
           </div>
         ) : (
-          <div className="empty-projects-state">
-            <div className="empty-icon-wrap">
-              <Globe className="empty-icon" size={26} />
-            </div>
-            <h3>No community projects yet</h3>
-            <p>
-              Be the first to share your architectural visualization with the
-              community.
-            </p>
-            <Link to="/" className="empty-cta">
-              Upload Floor Plan <ArrowRight size={14} className="icon" />
-            </Link>
-          </div>
+          <EmptyState
+            title="No community projects yet"
+            description="Be the first to share your architectural visualization with the community."
+            actionText="Create Project"
+            onAction={handleCreateProject}
+          />
         )}
       </div>
     </div>

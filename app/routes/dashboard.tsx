@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowRight, Check, Clock, Copy, FolderPlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Toggle from "../../components/ui/Toggle";
 import Modal from "../../components/ui/Modal";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
 import Upload from "../../components/Upload";
 import { useAuth } from "../../components/AuthProvider";
 import {
@@ -22,6 +23,7 @@ export function meta() {
 export default function Dashboard() {
   const { isSignedIn, isAuthLoading, userName, userId } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -31,6 +33,13 @@ export default function Dashboard() {
   const [copiedName, setCopiedName] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const isCreatingProjectRef = useRef(false);
+
+  useEffect(() => {
+    if (location.state?.openUpload) {
+      setShowModal(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const targetDeleteName = projectToDelete?.name || (projectToDelete?.id ? `Residence ${projectToDelete.id}` : "");
   const isDeleteNameMatching = deleteConfirmText.trim() === targetDeleteName.trim() && targetDeleteName.length > 0;
@@ -162,37 +171,50 @@ export default function Dashboard() {
     }
   };
 
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full bg-zinc-200 animate-pulse" />
-      </div>
-    );
-  }
+  const isPageLoading = isAuthLoading || isLoading;
 
   return (
     <div className="dashboard-page">
       {/* Stats Row */}
       <div className="dash-header">
         <div className="dash-greeting">
-          <h1>Hey, {firstName}!</h1>
-          <p>Here's an overview of your workspace.</p>
+          {isPageLoading ? (
+            <div>
+              <div className="h-8 w-44 bg-zinc-200 animate-pulse rounded-md mb-2" />
+              <div className="h-4 w-60 bg-zinc-100 animate-pulse rounded-md" />
+            </div>
+          ) : (
+            <>
+              <h1>Hey, {firstName}!</h1>
+              <p>Here's an overview of your workspace.</p>
+            </>
+          )}
         </div>
         <div className="dash-stats">
           <div className="stat-pill">
-            <span className="stat-value">
-              {isLoading ? "—" : totalProjects}
-            </span>
+            {isPageLoading ? (
+              <div className="w-7 h-5 bg-zinc-200 animate-pulse rounded my-0.5" />
+            ) : (
+              <span className="stat-value">{totalProjects}</span>
+            )}
             <span className="stat-label">Total</span>
           </div>
           <div className="stat-divider" />
           <div className="stat-pill">
-            <span className="stat-value">{isLoading ? "—" : privateCount}</span>
+            {isPageLoading ? (
+              <div className="w-7 h-5 bg-zinc-200 animate-pulse rounded my-0.5" />
+            ) : (
+              <span className="stat-value">{privateCount}</span>
+            )}
             <span className="stat-label">Private</span>
           </div>
           <div className="stat-divider" />
           <div className="stat-pill">
-            <span className="stat-value">{isLoading ? "—" : publicCount}</span>
+            {isPageLoading ? (
+              <div className="w-7 h-5 bg-zinc-200 animate-pulse rounded my-0.5" />
+            ) : (
+              <span className="stat-value">{publicCount}</span>
+            )}
             <span className="stat-label">Public</span>
           </div>
         </div>
@@ -213,7 +235,7 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {isLoading ? (
+        {isPageLoading ? (
           <ProjectSkeleton count={3} />
         ) : projects.length > 0 ? (
           <div className="projects-grid">
@@ -274,19 +296,12 @@ export default function Dashboard() {
             })}
           </div>
         ) : (
-          <div className="empty-projects-state">
-            <div className="empty-icon-wrap">
-              <FolderPlus className="empty-icon" size={26} />
-            </div>
-            <h3>No projects yet</h3>
-            <p>
-              Upload your first floor plan to start generating 3D architectural
-              visualizations.
-            </p>
-            <button className="empty-cta" onClick={() => setShowModal(true)}>
-              Upload Floor Plan <ArrowRight size={14} className="icon" />
-            </button>
-          </div>
+          <EmptyState
+            title="No projects yet"
+            description="Upload your first floor plan to start generating 3D architectural visualizations."
+            actionText="Upload Floor Plan"
+            onAction={() => setShowModal(true)}
+          />
         )}
       </div>
 
