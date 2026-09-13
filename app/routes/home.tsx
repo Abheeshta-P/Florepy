@@ -95,7 +95,7 @@ export default function Home() {
 
       const saved = await createProject({
         item: newItem,
-        visibility: "private",
+        isPublic: false,
       });
 
       if (!saved) {

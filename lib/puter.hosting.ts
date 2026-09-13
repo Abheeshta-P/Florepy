@@ -71,10 +71,10 @@ export const uploadImageToHosting = async ({
   url,
   projectId,
   label,
-  visibility,
+  isPublic = false,
 }: StoreHostedImageParams): Promise<HostedAsset | null> => {
   if (!url) return null;
-  if (visibility === "public" && !hosting) return null;
+  if (isPublic && !hosting) return null;
 
   if (isHostedUrl(url)) return { url };
 
@@ -103,7 +103,7 @@ export const uploadImageToHosting = async ({
     await puter.fs.write(privateFilePath, uploadFile);
 
     // 2. If PUBLIC, copy into the public hosting folder: public/project/{projectId}/{label}.{ext}
-    if (visibility === "public" && hosting) {
+    if (isPublic && hosting) {
       const publicDir = `${PUBLIC_HOSTING_DIR}/project/${projectId}`;
       const publicFilePath = `${publicDir}/${label}.${ext}`;
       await puter.fs.mkdir(publicDir, { createMissingParents: true });

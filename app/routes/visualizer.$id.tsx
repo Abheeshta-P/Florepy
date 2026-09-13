@@ -6,7 +6,7 @@ import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { Check, Copy, Download, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
-import { createProject, getProjectById, toggleProjectVisibility } from "../../lib/puter.action";
+import { createProject, getProjectById, toggleProjectPublic } from "../../lib/puter.action";
 import {
   ReactCompareSlider,
   ReactCompareSliderImage,
@@ -70,7 +70,7 @@ function VisualizerId() {
     if (!project || !isOwner) return;
     try {
       setIsSharing(true);
-      const updated = await toggleProjectVisibility({
+      const updated = await toggleProjectPublic({
         project,
         isPublic: true,
       });
@@ -89,7 +89,7 @@ function VisualizerId() {
     if (!project || !isOwner) return;
     try {
       setIsSharing(true);
-      const updated = await toggleProjectVisibility({
+      const updated = await toggleProjectPublic({
         project,
         isPublic: false,
       });
@@ -162,8 +162,8 @@ function VisualizerId() {
       if (result.renderedImage) {
         setCurrentImage(result.renderedImage);
 
-        // Preserve current visibility (public or private) instead of downgrading
-        const currentVisibility = item.isPublic ? "public" : (item.visibility || "private");
+        // Preserve current public state instead of downgrading
+        const isProjectPublic = Boolean(item.isPublic);
 
         // put this image in the kv of the project which is already present
         const updatedItem: DesignItem = {
@@ -173,13 +173,12 @@ function VisualizerId() {
           timestamp: Date.now(),
           ownerId: item.ownerId ?? userId ?? null,
           ownerName: item.ownerName ?? userName ?? null,
-          isPublic: currentVisibility === "public",
-          visibility: currentVisibility,
+          isPublic: isProjectPublic,
         };
 
         const saved = await createProject({
           item: updatedItem,
-          visibility: currentVisibility,
+          isPublic: isProjectPublic,
         });
 
         if (saved) {

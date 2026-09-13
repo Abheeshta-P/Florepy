@@ -41,7 +41,7 @@ const callWorker = async (url: string, init?: RequestInit): Promise<Response> =>
 // create project and create kv
 export const createProject = async ({
   item,
-  visibility = "private",
+  isPublic = false,
   isUpdate = false,
 }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
   if (!PUTER_WORKER_URL) {
@@ -54,10 +54,14 @@ export const createProject = async ({
     return null;
   }
 
+  // Standardize on isPublic: boolean
+  const standardizedIsPublic =
+    typeof isPublic === "boolean" ? isPublic : Boolean(item.isPublic);
+
   const projectId = item.id;
 
   // Only use public hosting config if project is marked public
-  const hosting = visibility === "public" ? await getOrCreateHostingConfig() : null;
+  const hosting = standardizedIsPublic ? await getOrCreateHostingConfig() : null;
 
   // host
   const hostedSource = projectId
@@ -66,7 +70,7 @@ export const createProject = async ({
         url: item.sourceImage,
         projectId,
         label: "source",
-        visibility,
+        isPublic: standardizedIsPublic,
       })
     : null;
 
@@ -77,7 +81,7 @@ export const createProject = async ({
           url: item.renderedImage,
           projectId,
           label: "rendered",
-          visibility,
+          isPublic: standardizedIsPublic,
         })
       : null;
 
@@ -113,8 +117,7 @@ export const createProject = async ({
     ownerId,
     sourceImage: resolvedSource,
     renderedImage: resolvedRender,
-    visibility,
-    isPublic: visibility === "public",
+    isPublic: standardizedIsPublic,
   };
 
   try {
@@ -128,7 +131,7 @@ export const createProject = async ({
         },
         body: JSON.stringify({
           project: payload,
-          visibility,
+          isPublic: standardizedIsPublic,
           isUpdate,
         }),
       },
@@ -146,21 +149,6 @@ export const createProject = async ({
     console.error("Failed to save project", error);
     return null;
   }
-};
-
-// Normalize project records so isPublic and visibility are always consistent
-// add is public for older projects
-const normalizeProject = (p: DesignItem): DesignItem => {
-  const isPublic = p.visibility
-    ? p.visibility === "public"
-    : Boolean(p.isPublic) && p.visibility !== "private";
-
-  return {
-    ...p,
-    ownerName: p.ownerName || null,
-    isPublic,
-    visibility: isPublic ? "public" : "private",
-  };
 };
 
 // Helper to resolve private filesystem paths into displayable local blob URLs
@@ -214,8 +202,7 @@ export const getProjects = async () => {
     const rawProjects = Array.isArray(data?.projects) ? data.projects : [];
 
     const mapped = await Promise.all(
-      rawProjects.map(async (raw) => {
-        const p = normalizeProject(raw);
+      rawProjects.map(async (p) => {
         const sourceImage = (await resolveDisplayUrl(p.sourceImage)) || p.sourceImage;
         const renderedImage = (await resolveDisplayUrl(p.renderedImage)) || p.renderedImage;
         return {
@@ -255,8 +242,7 @@ export const getCommunityProjects = async (): Promise<DesignItem[]> => {
     const rawProjects = Array.isArray(data?.projects) ? data.projects : [];
 
     const mapped = await Promise.all(
-      rawProjects.map(async (raw) => {
-        const p = normalizeProject(raw);
+      rawProjects.map(async (p) => {
         const sourceImage = (await resolveDisplayUrl(p.sourceImage)) || p.sourceImage;
         const renderedImage = (await resolveDisplayUrl(p.renderedImage)) || p.renderedImage;
         return {
@@ -266,8 +252,6 @@ export const getCommunityProjects = async (): Promise<DesignItem[]> => {
         };
       })
     );
-
-    console.log(mapped)
 
     return mapped;
   } catch (error) {
@@ -288,8 +272,6 @@ export const getProjectById = async ({ id }: { id: string }) => {
       { method: "GET" },
     );
 
-    console.log("Fetch project response:", response);
-
     if (!response.ok) {
       console.error("Failed to fetch project:", await response.text());
       return null;
@@ -299,17 +281,14 @@ export const getProjectById = async ({ id }: { id: string }) => {
       project?: DesignItem | null;
     };
 
-    console.log("Fetched project data:", data);
-
     const project = data?.project ?? null;
     if (!project) return null;
 
-    const p = normalizeProject(project);
-    const sourceImage = (await resolveDisplayUrl(p.sourceImage)) || p.sourceImage;
-    const renderedImage = (await resolveDisplayUrl(p.renderedImage)) || p.renderedImage;
+    const sourceImage = (await resolveDisplayUrl(project.sourceImage)) || project.sourceImage;
+    const renderedImage = (await resolveDisplayUrl(project.renderedImage)) || project.renderedImage;
 
     return {
-      ...p,
+      ...project,
       sourceImage,
       renderedImage,
     };
@@ -319,7 +298,7 @@ export const getProjectById = async ({ id }: { id: string }) => {
   }
 };
 
-export const toggleProjectVisibility = async ({
+export const toggleProjectPublic = async ({
   project,
   isPublic,
 }: {
@@ -329,7 +308,6 @@ export const toggleProjectVisibility = async ({
   if (!project?.id) return null;
 
   const projectId = project.id;
-  const visibility: "public" | "private" = isPublic ? "public" : "private";
 
   let publicSource = project.sourceImage;
   let publicRender = project.renderedImage;
@@ -380,7 +358,6 @@ export const toggleProjectVisibility = async ({
     ownerId,
     ownerName,
     isPublic,
-    visibility,
     sourceImage: publicSource,
     renderedImage: publicRender,
   };
@@ -400,7 +377,7 @@ export const toggleProjectVisibility = async ({
   // 2. Call createProject (which passes payload to worker and syncs hosting)
   const saved = await createProject({
     item: updatedItem,
-    visibility,
+    isPublic,
     isUpdate: true,
   });
 
@@ -410,7 +387,6 @@ export const toggleProjectVisibility = async ({
   return {
     ...(saved ?? updatedItem),
     isPublic,
-    visibility,
     sourceImage: displaySource,
     renderedImage: displayRender,
   };

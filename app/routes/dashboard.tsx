@@ -11,7 +11,7 @@ import { useAuth } from "../../components/AuthProvider";
 import {
   getProjects,
   createProject,
-  toggleProjectVisibility,
+  toggleProjectPublic,
   deleteProject,
 } from "../../lib/puter.action";
 import { validateServerUploadBoundary } from "../../lib/constants";
@@ -128,7 +128,7 @@ export default function Dashboard() {
 
       const saved = await createProject({
         item: newItem,
-        visibility: "private",
+        isPublic: false,
       });
       if (!saved) return false;
 
@@ -147,7 +147,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleToggleVisibility = async (
+  const handleTogglePublic = async (
     e: React.MouseEvent,
     project: DesignItem,
   ) => {
@@ -155,7 +155,7 @@ export default function Dashboard() {
     try {
       setTogglingId(project.id);
       const nextIsPublic = !project.isPublic;
-      const updated = await toggleProjectVisibility({
+      const updated = await toggleProjectPublic({
         project,
         isPublic: nextIsPublic,
       });
@@ -165,7 +165,7 @@ export default function Dashboard() {
         );
       }
     } catch (error) {
-      console.error("Failed to toggle visibility:", error);
+      console.error("Failed to toggle public status:", error);
     } finally {
       setTogglingId(null);
     }
@@ -262,7 +262,7 @@ export default function Dashboard() {
                     <Toggle
                       checked={Boolean(isPublic)}
                       loading={togglingId === id}
-                      onChange={(_, e) => handleToggleVisibility(e, project)}
+                      onChange={(_, e) => handleTogglePublic(e, project)}
                       className="absolute top-3 left-3 z-10"
                     />
                     <button

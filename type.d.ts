@@ -26,7 +26,6 @@ interface DesignItem {
   ownerName?: string | null;
   sharedAt?: string | null;
   isPublic?: boolean;
-  visibility?: "private" | "public";
   isOwner?: boolean;
 }
 
@@ -118,12 +117,12 @@ interface StoreHostedImageParams {
   url: string;
   projectId: string;
   label: "source" | "rendered";
-  visibility?: "private" | "public";
+  isPublic?: boolean;
 }
 
 interface CreateProjectParams {
   item: DesignItem;
-  visibility?: "private" | "public";
+  isPublic?: boolean;
   isUpdate?: boolean;
 }
 
