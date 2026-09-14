@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { ArrowRight, Check, Clock, Copy, FolderPlus, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, Clock, Copy, FolderPlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Toggle from "../../components/ui/Toggle";
 import Modal from "../../components/ui/Modal";
@@ -13,6 +13,7 @@ import {
   createProject,
   toggleProjectPublic,
   deleteProject,
+  renameProject,
 } from "../../lib/puter.action";
 import { validateServerUploadBoundary } from "../../lib/constants";
 
@@ -32,6 +33,9 @@ export default function Dashboard() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [copiedName, setCopiedName] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
   const isCreatingProjectRef = useRef(false);
 
   useEffect(() => {
@@ -171,6 +175,48 @@ export default function Dashboard() {
     }
   };
 
+  const handleStartRename = (e: React.MouseEvent, project: DesignItem) => {
+    e.stopPropagation();
+    setEditingId(project.id);
+    setEditName(project.name || "");
+  };
+
+  const handleCancelRename = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const handleSaveRename = async (
+    e: React.MouseEvent | React.KeyboardEvent,
+    project: DesignItem,
+  ) => {
+    e.stopPropagation();
+    const trimmed = editName.trim();
+    if (!trimmed || trimmed === project.name) {
+      setEditingId(null);
+      return;
+    }
+
+    try {
+      setIsRenaming(true);
+      const updated = await renameProject({
+        project,
+        name: trimmed,
+      });
+      if (updated) {
+        setProjects((prev) =>
+          prev.map((p) => (p.id === project.id ? { ...p, name: trimmed } : p)),
+        );
+      }
+    } catch (err) {
+      console.error("Failed to rename project:", err);
+    } finally {
+      setIsRenaming(false);
+      setEditingId(null);
+    }
+  };
+
   const isPageLoading = isAuthLoading || isLoading;
 
   return (
@@ -280,14 +326,72 @@ export default function Dashboard() {
                     </button>
                   </div>
                   <div className="card-body">
-                    <div>
-                      <h3>{name}</h3>
+                    <div className="min-w-0 flex-1 mr-2">
+                      {editingId === id ? (
+                        <div
+                          className="flex items-center gap-1.5 mb-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveRename(e, project);
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                handleCancelRename();
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-base font-serif font-semibold text-zinc-900 bg-white border border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary rounded px-2 py-0.5 outline-none w-full max-w-[180px] sm:max-w-[210px] shadow-xs leading-snug"
+                            autoFocus
+                            disabled={isRenaming}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => handleSaveRename(e, project)}
+                            disabled={isRenaming || !editName.trim()}
+                            className="w-7 h-7 flex items-center justify-center rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                            title="Save name"
+                          >
+                            {isRenaming ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Check size={13} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCancelRename(e)}
+                            disabled={isRenaming}
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer shrink-0"
+                            title="Cancel"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 group/name mb-1">
+                          <h3 className="truncate">{name}</h3>
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartRename(e, project)}
+                            className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-black hover:bg-zinc-100 transition-all opacity-70 group-hover/name:opacity-100 cursor-pointer shrink-0"
+                            title="Rename project"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        </div>
+                      )}
                       <div className="meta">
                         <Clock size={12} />
                         <span>{new Date(timestamp).toLocaleDateString()}</span>
                       </div>
                     </div>
-                    <div className="arrow">
+                    <div className="arrow shrink-0">
                       <ArrowRight size={20} />
                     </div>
                   </div>

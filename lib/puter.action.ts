@@ -424,3 +424,57 @@ export const deleteProject = async ({
     return false;
   }
 };
+
+export const renameProject = async ({
+  project,
+  name,
+}: {
+  project: DesignItem;
+  name: string;
+}): Promise<DesignItem | null> => {
+  if (!project?.id || !name.trim()) return null;
+  const trimmedName = name.trim();
+  const id = project.id;
+
+  try {
+    // 1. Direct KV update for instant local consistency
+    const key = `florepy_project_${id}`;
+    const existing = await puter.kv.get(key).catch(() => null);
+    const existingRecord = (typeof existing === "object" && existing !== null ? existing : {}) as Partial<DesignItem>;
+
+    const updated: DesignItem = {
+      ...project,
+      ...existingRecord,
+      id: project.id,
+      name: trimmedName,
+      sourceImage: existingRecord.sourceImage || project.sourceImage,
+      timestamp: existingRecord.timestamp || project.timestamp,
+      isPublic: Boolean(existingRecord.isPublic ?? project.isPublic),
+    };
+
+    await puter.kv.set(key, updated).catch(() => null);
+
+    // 2. Sync with worker (which updates user store and community registry if public)
+    if (PUTER_WORKER_URL) {
+      await callWorker(`${PUTER_WORKER_URL}/api/projects/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          project: updated,
+          isPublic: Boolean(updated.isPublic),
+          isUpdate: true,
+        }),
+      }).catch(() => null);
+    }
+
+    return {
+      ...project,
+      name: trimmedName,
+    };
+  } catch (error) {
+    console.error("Failed to rename project:", error);
+    return null;
+  }
+};
