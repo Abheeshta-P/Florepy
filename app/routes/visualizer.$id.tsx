@@ -49,8 +49,6 @@ function VisualizerId() {
             userName.toLowerCase() === project.ownerName.toLowerCase())
         );
 
-  const handleBack = () => navigate("/");
-
   const copyShareLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -272,7 +270,7 @@ function VisualizerId() {
                   size="sm"
                   onClick={handleExport}
                   className="export"
-                  disabled={!currentImage}
+                  disabled={!currentImage || isProcessing}
                 >
                   <Download className="w-4 h-4 mr-2" /> Export
                 </Button>
@@ -280,8 +278,8 @@ function VisualizerId() {
                   <Button
                     size="sm"
                     onClick={handleShareClick}
-                    className="share cursor-pointer"
-                    disabled={!currentImage || isSharing}
+                    className="share"
+                    disabled={!currentImage || isProcessing || isSharing}
                   >
                     <Share2 className="w-4 h-4 mr-2" /> Share
                   </Button>
@@ -289,8 +287,8 @@ function VisualizerId() {
                   <Button
                     size="sm"
                     onClick={copyShareLink}
-                    className="share cursor-pointer"
-                    disabled={!currentImage}
+                    className="share"
+                    disabled={!currentImage || isProcessing}
                   >
                     {copied ? (
                       <>

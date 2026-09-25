@@ -354,7 +354,7 @@ export default function Dashboard() {
                             type="button"
                             onClick={(e) => handleSaveRename(e, project)}
                             disabled={isRenaming || !editName.trim()}
-                            className="w-7 h-7 flex items-center justify-center rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                            className="w-6 h-6 flex items-center justify-center rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors cursor-pointer disabled:opacity-50 shrink-0"
                             title="Save name"
                           >
                             {isRenaming ? (
@@ -367,7 +367,7 @@ export default function Dashboard() {
                             type="button"
                             onClick={(e) => handleCancelRename(e)}
                             disabled={isRenaming}
-                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer shrink-0"
+                            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer shrink-0"
                             title="Cancel"
                           >
                             <X size={13} />
