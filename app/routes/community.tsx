@@ -6,6 +6,7 @@ import { useAuth } from "../../components/AuthProvider";
 import Button from "../../components/ui/Button";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
+import ProjectImage from "../../components/ui/ProjectImage";
 
 export function meta() {
   return [
@@ -81,7 +82,7 @@ export default function Community() {
                   onClick={() => navigate(`/visualizer/${id}`)}
                 >
                   <div className="preview">
-                    <img
+                    <ProjectImage
                       src={renderedImage || sourceImage}
                       alt={name || "Project"}
                     />

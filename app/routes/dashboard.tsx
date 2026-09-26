@@ -1,11 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { ArrowRight, Check, Clock, Copy, FolderPlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Clock,
+  Copy,
+  FolderPlus,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import Button from "../../components/ui/Button";
 import Toggle from "../../components/ui/Toggle";
 import Modal from "../../components/ui/Modal";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
+import ProjectImage from "../../components/ui/ProjectImage";
 import Upload from "../../components/Upload";
 import { useAuth } from "../../components/AuthProvider";
 import {
@@ -29,7 +41,9 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [projectToDelete, setProjectToDelete] = useState<DesignItem | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<DesignItem | null>(
+    null,
+  );
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [copiedName, setCopiedName] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -45,8 +59,12 @@ export default function Dashboard() {
     }
   }, [location.state]);
 
-  const targetDeleteName = projectToDelete?.name || (projectToDelete?.id ? `Residence ${projectToDelete.id}` : "");
-  const isDeleteNameMatching = deleteConfirmText.trim() === targetDeleteName.trim() && targetDeleteName.length > 0;
+  const targetDeleteName =
+    projectToDelete?.name ||
+    (projectToDelete?.id ? `Residence ${projectToDelete.id}` : "");
+  const isDeleteNameMatching =
+    deleteConfirmText.trim() === targetDeleteName.trim() &&
+    targetDeleteName.length > 0;
 
   const closeDeleteModal = () => {
     if (isDeleting) return;
@@ -296,12 +314,15 @@ export default function Dashboard() {
               } = project;
               return (
                 <div
-                  className="project-card group"
+                  className={`project-card group ${editingId === id ? "!cursor-default hover:!shadow-sm hover:!border-zinc-200" : ""}`}
                   key={id}
-                  onClick={() => navigate(`/visualizer/${id}`)}
+                  onClick={() => {
+                    if (editingId) return;
+                    navigate(`/visualizer/${id}`);
+                  }}
                 >
                   <div className="preview">
-                    <img
+                    <ProjectImage
                       src={renderedImage || sourceImage}
                       alt={name || "Project"}
                     />
@@ -432,13 +453,17 @@ export default function Dashboard() {
         title="Delete Project"
       >
         <p className="text-xs text-zinc-500 leading-relaxed mb-3">
-          This action cannot be undone. This will permanently delete the visualization and floor plan.
+          This action cannot be undone. This will permanently delete the
+          visualization and floor plan.
         </p>
 
         {/* Confirmation text input with inline project name & copy button */}
         <div className="mb-4">
           <p className="text-xs text-zinc-600 mb-2 leading-relaxed">
-            Type <strong className="font-semibold text-zinc-900">{targetDeleteName}</strong>{" "}
+            Type{" "}
+            <strong className="font-semibold text-zinc-900">
+              {targetDeleteName}
+            </strong>{" "}
             <button
               type="button"
               onClick={handleCopyProjectName}
@@ -446,9 +471,9 @@ export default function Dashboard() {
               title="Copy project name"
             >
               {copiedName ? (
-                  <Check size={11} className="text-emerald-500" />
+                <Check size={11} className="text-emerald-500" />
               ) : (
-                  <Copy size={11} />
+                <Copy size={11} />
               )}
             </button>{" "}
             to confirm:

@@ -4,6 +4,7 @@ import Button from "../../components/ui/Button";
 import Upload from "../../components/Upload";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
+import ProjectImage from "../../components/ui/ProjectImage";
 import { Link, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { validateServerUploadBoundary } from "../../lib/constants";
@@ -204,7 +205,7 @@ export default function Home() {
                         onClick={() => navigate(`/visualizer/${id}`)}
                       >
                         <div className="preview">
-                          <img
+                          <ProjectImage
                             src={renderedImage || sourceImage}
                             alt={name || "Project"}
                           />
