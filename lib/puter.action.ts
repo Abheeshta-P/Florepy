@@ -4,7 +4,7 @@ import {
   uploadImageToHosting,
   PUBLIC_HOSTING_DIR,
 } from "./puter.hosting";
-import { isHostedUrl, getHostedUrl } from "./utils";
+import { isHostedUrl, getHostedUrl, isDisplayableUrl } from "./utils";
 import { PUTER_WORKER_URL } from "./constants";
 
 export const signIn = async () => await puter.auth.signIn();
@@ -152,14 +152,14 @@ export const createProject = async ({
 
     // If Puter FS path was returned without being resolved, preserve in-memory working URLs if available
     const finalSource =
-      sourceDisplay && !sourceDisplay.startsWith("project/")
+      isDisplayableUrl(sourceDisplay)
         ? sourceDisplay
-        : (item.sourceImage && !item.sourceImage.startsWith("project/") ? item.sourceImage : sourceDisplay);
+        : (isDisplayableUrl(item.sourceImage) ? item.sourceImage : sourceDisplay);
 
     const finalRender =
-      renderDisplay && !renderDisplay.startsWith("project/")
+      isDisplayableUrl(renderDisplay)
         ? renderDisplay
-        : (item.renderedImage && !item.renderedImage.startsWith("project/") ? item.renderedImage : renderDisplay);
+        : (isDisplayableUrl(item.renderedImage) ? item.renderedImage : renderDisplay);
 
     return {
       ...savedProject,
@@ -177,12 +177,7 @@ export const resolveDisplayUrl = async (
   url: string | null | undefined
 ): Promise<string | null> => {
   if (!url) return null;
-  if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("data:") ||
-    url.startsWith("blob:")
-  ) {
+  if (isDisplayableUrl(url)) {
     return url;
   }
 

@@ -16,7 +16,7 @@ import {
   ReactCompareSlider,
   ReactCompareSliderImage,
 } from "react-compare-slider";
-import { fetchBlobFromUrl, getImageExtension } from "../../lib/utils";
+import { fetchBlobFromUrl, getImageExtension, isDisplayableUrl } from "../../lib/utils";
 
 export function meta() {
   return [
@@ -24,16 +24,6 @@ export function meta() {
     { name: "description", content: "View and compare your architectural visualizations." }
   ];
 }
-
-const isDisplayableUrl = (url?: string | null): boolean => {
-  if (!url) return false;
-  return (
-    url.startsWith("data:") ||
-    url.startsWith("blob:") ||
-    url.startsWith("http://") ||
-    url.startsWith("https://")
-  );
-};
 
 function VisualizerId() {
   // which user which id

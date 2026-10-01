@@ -6,6 +6,13 @@ export const createHostingSlug = () => `florepy-${Date.now().toString(36)}-${Mat
 export const isHostedUrl = (value: unknown): value is string =>
   typeof value === "string" && value.includes(HOSTING_DOMAIN_SUFFIX);
 
+export const isDisplayableUrl = (value: unknown): value is string =>
+  typeof value === "string" &&
+  (value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("data:") ||
+    value.startsWith("blob:"));
+
 const normalizeHost = (subdomain: string) =>
   subdomain.endsWith(HOSTING_DOMAIN_SUFFIX)
     ? subdomain
