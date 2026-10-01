@@ -334,7 +334,7 @@ function VisualizerId() {
                 <div className="h-9 bg-zinc-200 rounded w-24"></div>
               </div>
             </div>
-            <div className="render-area bg-zinc-200/50 min-h-125"></div>
+            <div className="render-area bg-zinc-200/50"></div>
           </div>
         ) : !project ? (
           <ProjectNotFound id={id} />
@@ -386,7 +386,7 @@ function VisualizerId() {
                 )}
               </div>
             </div>
-            <div className={`render-area ${isProcessing ? "is-processing" : ""} min-h-125`}>
+            <div className={`render-area ${isProcessing ? "is-processing" : ""}`}>
               {isDisplayableUrl(currentImage) && isDisplayableUrl(project?.sourceImage) && !isProcessing ? (
                 <ReactCompareSlider
                   defaultValue={50}

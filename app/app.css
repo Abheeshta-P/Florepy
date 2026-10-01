@@ -267,10 +267,10 @@
     }
 
     .visualizer {
-        @apply min-h-screen bg-background mt-22 pb-10 px-4 md:px-6 flex flex-col items-center font-sans relative;
+        @apply min-h-screen bg-background mt-22 pb-10 px-4 md:px-6 lg:px-8 xl:px-10 flex flex-col items-center font-sans relative;
 
         .topbar {
-            @apply w-full max-w-6xl flex items-center justify-between mb-6 px-2;
+            @apply w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] flex items-center justify-between mb-6 px-2 transition-all duration-300;
 
             .brand {
                 @apply flex items-center space-x-2 cursor-pointer;
@@ -294,14 +294,14 @@
         }
 
         .content {
-            @apply w-full max-w-5xl mx-auto grid grid-cols-1 gap-6;
+            @apply w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto grid grid-cols-1 gap-6 transition-all duration-300;
         }
 
         .panel {
-            @apply bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden;
+            @apply bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col;
 
             .panel-header {
-                @apply flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 border-b border-zinc-100;
+                @apply flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 border-b border-zinc-100 shrink-0;
 
                 .panel-meta {
                     p {
@@ -335,7 +335,7 @@
             }
 
             .render-area {
-                @apply relative bg-zinc-100 min-h-105;
+                @apply relative bg-zinc-100 min-h-125 md:min-h-[560px] lg:min-h-[660px] xl:min-h-[740px] 2xl:min-h-[820px] lg:h-[72vh] xl:h-[78vh] 2xl:h-[82vh] w-full flex-1 transition-all duration-300;
 
                 .render-img {
                     @apply w-full h-full object-contain transition-all duration-700 opacity-100 scale-100;
