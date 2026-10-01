@@ -6,7 +6,12 @@ import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { Check, Copy, Download, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
-import { createProject, getProjectById, toggleProjectPublic } from "../../lib/puter.action";
+import {
+  createProject,
+  getProjectById,
+  resolveDisplayUrl,
+  toggleProjectPublic,
+} from "../../lib/puter.action";
 import {
   ReactCompareSlider,
   ReactCompareSliderImage,
@@ -19,6 +24,16 @@ export function meta() {
     { name: "description", content: "View and compare your architectural visualizations." }
   ];
 }
+
+const isDisplayableUrl = (url?: string | null): boolean => {
+  if (!url) return false;
+  return (
+    url.startsWith("data:") ||
+    url.startsWith("blob:") ||
+    url.startsWith("http://") ||
+    url.startsWith("https://")
+  );
+};
 
 function VisualizerId() {
   // which user which id
@@ -158,7 +173,14 @@ function VisualizerId() {
 
       const result = await generate3DView({ sourceImage: item.sourceImage });
       if (result.renderedImage) {
-        setCurrentImage(result.renderedImage);
+        // Retain the generated data URL immediately for instant feedback
+        const displayableRender = result.renderedImage;
+        const displayableSource =
+          isDisplayableUrl(project?.sourceImage)
+            ? project!.sourceImage!
+            : item.sourceImage;
+
+        setCurrentImage(displayableRender);
 
         // Preserve current public state instead of downgrading
         const isProjectPublic = Boolean(item.isPublic);
@@ -180,8 +202,30 @@ function VisualizerId() {
         });
 
         if (saved) {
-          setProject(saved);
-          setCurrentImage(saved.renderedImage || result.renderedImage);
+          const finalSource =
+            isDisplayableUrl(saved.sourceImage)
+              ? saved.sourceImage
+              : displayableSource;
+          const finalRender =
+            isDisplayableUrl(saved.renderedImage)
+              ? saved.renderedImage
+              : displayableRender;
+
+          setProject({
+            ...saved,
+            sourceImage: finalSource,
+            renderedImage: finalRender,
+          });
+          setCurrentImage(finalRender || null);
+        } else {
+          setProject((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  renderedImage: displayableRender,
+                }
+              : prev
+          );
         }
       }
     } catch (error) {
@@ -206,8 +250,29 @@ function VisualizerId() {
 
       if (!isMounted) return;
 
-      setProject(fetchedProject);
-      setCurrentImage(fetchedProject?.renderedImage || null);
+      if (fetchedProject) {
+        let sourceUrl = fetchedProject.sourceImage;
+        let renderUrl = fetchedProject.renderedImage;
+
+        if (sourceUrl && !isDisplayableUrl(sourceUrl)) {
+          sourceUrl = (await resolveDisplayUrl(sourceUrl)) || sourceUrl;
+        }
+        if (renderUrl && !isDisplayableUrl(renderUrl)) {
+          renderUrl = (await resolveDisplayUrl(renderUrl)) || renderUrl;
+        }
+
+        const finalizedProject = {
+          ...fetchedProject,
+          sourceImage: sourceUrl,
+          renderedImage: renderUrl,
+        };
+
+        setProject(finalizedProject);
+        setCurrentImage(renderUrl || null);
+      } else {
+        setProject(null);
+        setCurrentImage(null);
+      }
       setIsProjectLoading(false);
       hasInitialGenerated.current = false;
     };
@@ -218,6 +283,31 @@ function VisualizerId() {
       isMounted = false;
     };
   }, [id]);
+
+  // Safety guard: ensure any unresolved Puter FS paths get resolved into displayable blob URLs
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (project?.sourceImage && !isDisplayableUrl(project.sourceImage)) {
+      resolveDisplayUrl(project.sourceImage).then((resolved) => {
+        if (isCurrent && resolved && isDisplayableUrl(resolved)) {
+          setProject((prev) => (prev ? { ...prev, sourceImage: resolved } : prev));
+        }
+      });
+    }
+
+    if (currentImage && !isDisplayableUrl(currentImage)) {
+      resolveDisplayUrl(currentImage).then((resolved) => {
+        if (isCurrent && resolved && isDisplayableUrl(resolved)) {
+          setCurrentImage(resolved);
+        }
+      });
+    }
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [project?.sourceImage, currentImage]);
 
   useEffect(() => {
     if (
@@ -304,13 +394,13 @@ function VisualizerId() {
               </div>
             </div>
             <div className={`render-area ${isProcessing ? "is-processing" : ""} min-h-125`}>
-              {currentImage && project?.sourceImage && !isProcessing ? (
+              {isDisplayableUrl(currentImage) && isDisplayableUrl(project?.sourceImage) && !isProcessing ? (
                 <ReactCompareSlider
                   defaultValue={50}
                   style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
                   itemOne={
                     <ReactCompareSliderImage
-                      src={project.sourceImage}
+                      src={project!.sourceImage!}
                       alt="before"
                       className="render-img w-full h-full"
                       style={{ objectFit: 'contain' }}
@@ -318,23 +408,27 @@ function VisualizerId() {
                   }
                   itemTwo={
                     <ReactCompareSliderImage
-                      src={currentImage}
+                      src={currentImage!}
                       alt="after"
                       className="render-img w-full h-full"
                       style={{ objectFit: 'contain' }}
                     />
                   }
                 />
-              ) : currentImage ? (
-                <img src={currentImage} alt="AI Render" className="render-img" />
+              ) : isDisplayableUrl(currentImage) ? (
+                <img src={currentImage!} alt="AI Render" className="render-img" />
               ) : (
                 <div className="render-placeholder flex items-center justify-center w-full h-full absolute inset-0">
-                  {project?.sourceImage && (
+                  {isDisplayableUrl(project?.sourceImage) ? (
                     <img
-                      src={project.sourceImage}
+                      src={project!.sourceImage!}
                       alt="Original"
                       className="render-fallback object-contain w-full h-full max-h-[80vh]"
                     />
+                  ) : (
+                    <div className="w-full h-full bg-zinc-200/50 animate-pulse flex items-center justify-center text-zinc-400 text-sm font-medium">
+                      Loading preview...
+                    </div>
                   )}
                 </div>
               )}

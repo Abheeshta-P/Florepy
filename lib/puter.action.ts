@@ -143,8 +143,29 @@ export const createProject = async ({
     }
 
     const data = (await response.json()) as { project?: DesignItem | null };
+    const savedProject = data?.project ?? null;
+    if (!savedProject) return null;
 
-    return data?.project ?? null;
+    // Resolve private paths to displayable blob URLs
+    const sourceDisplay = (await resolveDisplayUrl(savedProject.sourceImage)) || savedProject.sourceImage;
+    const renderDisplay = (await resolveDisplayUrl(savedProject.renderedImage)) || savedProject.renderedImage;
+
+    // If Puter FS path was returned without being resolved, preserve in-memory working URLs if available
+    const finalSource =
+      sourceDisplay && !sourceDisplay.startsWith("project/")
+        ? sourceDisplay
+        : (item.sourceImage && !item.sourceImage.startsWith("project/") ? item.sourceImage : sourceDisplay);
+
+    const finalRender =
+      renderDisplay && !renderDisplay.startsWith("project/")
+        ? renderDisplay
+        : (item.renderedImage && !item.renderedImage.startsWith("project/") ? item.renderedImage : renderDisplay);
+
+    return {
+      ...savedProject,
+      sourceImage: finalSource,
+      renderedImage: finalRender,
+    };
   } catch (error) {
     console.error("Failed to save project", error);
     return null;
@@ -166,9 +187,10 @@ export const resolveDisplayUrl = async (
   }
 
   // It is a private Puter FS path (e.g. project/123/source.png)
-  if (typeof window !== "undefined" && (window as any).puter?.fs) {
+  const puterFs = (typeof window !== "undefined" && (window as any).puter?.fs) || puter?.fs;
+  if (puterFs) {
     try {
-      const blob = await (window as any).puter.fs.read(url);
+      const blob = await puterFs.read(url);
       if (blob && blob.size > 0) {
         return URL.createObjectURL(blob);
       }
