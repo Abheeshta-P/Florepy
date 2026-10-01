@@ -671,13 +671,13 @@
     }
 
     .community-page {
-        @apply flex-1 w-full bg-background pt-24 pb-12 sm:pb-16 px-6 max-w-7xl mx-auto;
+        @apply flex-1 w-full bg-background pt-20 md:pt-24 pb-12 sm:pb-16 px-6 max-w-7xl mx-auto;
 
         .community-hero {
-            @apply text-center py-12 md:py-16 max-w-3xl mx-auto;
+            @apply text-center pt-2 pb-8 md:pt-4 md:pb-10 max-w-3xl mx-auto;
 
             h1 {
-                @apply text-3xl md:text-4xl lg:text-5xl font-serif font-semibold text-black mb-4 leading-snug;
+                @apply text-3xl md:text-4xl lg:text-5xl font-serif font-semibold text-black mb-3 md:mb-4 leading-snug;
             }
 
             p {
@@ -686,7 +686,7 @@
         }
 
         .community-body {
-            @apply mt-6;
+            @apply mt-2 md:mt-4;
         }
     }
 
