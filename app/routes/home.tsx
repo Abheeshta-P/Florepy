@@ -5,6 +5,7 @@ import Upload from "../../components/Upload";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
 import ProjectImage from "../../components/ui/ProjectImage";
+import Pill from "../../components/ui/Pill";
 import { Link, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { validateServerUploadBoundary } from "../../lib/constants";
@@ -141,12 +142,9 @@ export default function Home() {
   return (
     <div className="home">
       <section className="hero">
-        <div className="announce">
-          <div className="dot">
-            <div className="pulse"></div>
-          </div>
-          <p>Introducing Florepy 2.0</p>
-        </div>
+        <Pill dotColor="primary" className="mb-8">
+          Introducing Florepy 2.0
+        </Pill>
         <h1>Build beautiful spaces at the speed of thought with Florepy</h1>
         <p className="subtitle">
           Upload your 2D floor plan, let our AI render a photorealistic 3D

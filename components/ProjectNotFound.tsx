@@ -1,8 +1,9 @@
 import React from "react";
-import { Link, useNavigate } from "react-router";
-import { ArrowLeft, ArrowRight, Compass, FolderKanban, Globe, Home, Search } from "lucide-react";
+import { useNavigate } from "react-router";
+import { ArrowLeft, Compass } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import Button from "./ui/Button";
+import Pill from "./ui/Pill";
 
 interface ProjectNotFoundProps {
   id?: string;
@@ -18,10 +19,9 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
       className={`w-full max-w-3xl mx-auto flex flex-col items-center justify-center text-center px-4 py-12 md:py-16 ${className}`.trim()}
     >
       {/* Pill Badge */}
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-600/20 text-amber-900 text-xs font-mono font-medium uppercase tracking-wider mb-3">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+      <Pill dotColor="amber" className="mb-3">
         Project Not Found
-      </div>
+      </Pill>
       
       {/* 404 Architectural Blueprint Graphic */}
       <div className="relative mb-6 select-none">
@@ -131,36 +131,29 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
 
       {/* ID info pill */}
       {id && (
-        <div className="inline-flex items-center gap-1.5 font-mono text-xs text-zinc-500 bg-zinc-100/90 border border-zinc-200/80 rounded-lg px-3 py-1.5 mb-8">
+        <Pill variant="mono" className="mb-8">
           <span className="text-zinc-400">ID:</span>
           <span className="text-zinc-800 font-semibold">{id}</span>
-        </div>
+        </Pill>
       )}
 
       {/* Action CTA Buttons */}
       <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 w-full max-w-md">
-        {isSignedIn ? (
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-primary-hover transition-colors shadow-xs"
-          >
-            Go to Your Dashboard
-          </Link>
-        ) : (
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-primary-hover transition-colors shadow-xs"
-          >
-            Back to Home
-          </Link>
-        )}
+        <Button
+          size="md"
+          variant="primary"
+          onClick={() => navigate(isSignedIn ? "/dashboard" : "/")}
+        >
+          {isSignedIn ? "Go to Your Dashboard" : "Back to Home"}
+        </Button>
 
-        <Link
-          to="/community"
-          className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-zinc-800 bg-white border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors shadow-xs"
+        <Button
+          size="md"
+          variant="secondary"
+          onClick={() => navigate("/community")}
         >
           Explore Community
-        </Link>
+        </Button>
       </div>
 
       {/* Go Back button */}

@@ -409,18 +409,18 @@
             @apply pt-24 md:pt-32 pb-16 md:pb-20 px-6 max-w-7xl mx-auto flex flex-col items-center text-center;
 
             .announce {
-                @apply mb-8 inline-flex items-center px-3 py-1 rounded-md bg-white border border-zinc-200 shadow-sm;
+                @apply mb-8 inline-flex items-center px-3 py-1 rounded-full bg-white border border-zinc-200 shadow-xs;
 
                 .dot {
-                    @apply w-4 h-4 rounded bg-primary/20 flex items-center justify-center mr-2;
+                    @apply w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center mr-1.5;
 
                     .pulse {
-                        @apply w-2 h-2 rounded-full bg-primary animate-pulse;
+                        @apply w-1.5 h-1.5 rounded-full bg-primary animate-pulse;
                     }
                 }
 
                 p {
-                    @apply text-[10px] font-bold uppercase tracking-widest text-zinc-600;
+                    @apply text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-zinc-600;
                 }
             }
 

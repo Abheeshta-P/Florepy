@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { ArrowRight, Clock, Globe, Plus } from "lucide-react";
 import { getCommunityProjects, syncMissingPublicProjects } from "../../lib/puter.action";
 import { useAuth } from "../../components/AuthProvider";
-import Button from "../../components/ui/Button";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
 import ProjectImage from "../../components/ui/ProjectImage";
+import Pill from "../../components/ui/Pill";
 
 export function meta() {
   return [
@@ -53,9 +53,9 @@ export default function Community() {
       {/* Hero */}
       <div className="community-hero">
         <div className="community-hero-inner">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white border border-zinc-200 text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-6">
-            <Globe size={12} /> Community
-          </div>
+          <Pill icon={<Globe size={13} className="text-primary" />} className="mb-6">
+            Community
+          </Pill>
           <h1>Community Projects</h1>
           <p>
             Explore architectural visualizations created and shared by the
