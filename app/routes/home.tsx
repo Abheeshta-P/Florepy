@@ -1,6 +1,7 @@
-import { ArrowRight, Clock, FolderPlus, Layers } from "lucide-react";
+import { ArrowRight, Clock, FolderPlus, Layers, Play } from "lucide-react";
 import type { Route } from "./+types/home";
 import Button from "../../components/ui/Button";
+import Modal from "../../components/ui/Modal";
 import Upload from "../../components/Upload";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
@@ -64,6 +65,7 @@ export default function Home() {
   const { isSignedIn, signIn, userName, userId } = useAuth();
   const [projects, setProjects] = useState<DesignItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDemoModal, setShowDemoModal] = useState(false);
   const isCreatingProjectRef = useRef(false);
 
   const handleUploadComplete = async (base64Image: string) => {
@@ -156,8 +158,13 @@ export default function Home() {
           <a href="#upload" className="cta">
             Start Building <ArrowRight className="icon" />
           </a>
-          <Button variant="outline" size="lg" className="demo">
-            Watch Demo
+          <Button
+            variant="outline"
+            size="lg"
+            className="demo flex items-center gap-2 cursor-pointer"
+            onClick={() => setShowDemoModal(true)}
+          >
+            <Play className="w-3.5 h-3.5 fill-current" /> Watch Demo
           </Button>
         </div>
 
@@ -255,6 +262,28 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* Interactive Supademo Modal */}
+      <Modal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+        title="Interactive Product Demo"
+        description="Experience Florepy's architectural AI workflow step-by-step."
+        icon={<Play size={14} className="text-primary fill-primary/20" />}
+        maxWidth="max-w-4xl"
+      >
+        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-zinc-950/5 border border-zinc-200 mt-2 shadow-inner">
+          <iframe
+            src="https://app.supademo.com/embed/cmuqok9jk0hjfqm0pmr8zabyj?embed_v=2"
+            loading="lazy"
+            title="Florepy Interactive Demo"
+            allow="clipboard-write"
+            frameBorder="0"
+            allowFullScreen
+            className="absolute inset-0 w-full h-full border-0"
+          />
+        </div>
+      </Modal>
     </div>
   );
 }
