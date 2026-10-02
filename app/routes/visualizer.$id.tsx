@@ -427,11 +427,11 @@ function VisualizerId() {
               )}
 
               {isProcessing && (
-                <div className="render-overlay absolute inset-0 z-50 flex items-center justify-center bg-zinc-100/80 backdrop-blur-sm">
-                  <div className="rendering-card bg-white p-6 rounded-2xl shadow-sm flex flex-col items-center">
-                    <RefreshCcw className="spinner animate-spin text-primary w-8 h-8 mb-4" />
-                    <span className="title font-bold text-lg mb-1">Rendering...</span>
-                    <span className="subtitle text-sm text-zinc-500">
+                <div className="render-overlay absolute inset-0 z-20 flex items-center justify-center bg-zinc-100/80 backdrop-blur-sm">
+                  <div className="rendering-card bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm flex flex-col items-center max-w-[85vw] sm:max-w-none">
+                    <RefreshCcw className="spinner animate-spin text-primary w-6 h-6 sm:w-8 sm:h-8 mb-2.5 sm:mb-4" />
+                    <span className="title font-bold text-base sm:text-lg mb-0.5 sm:mb-1">Rendering...</span>
+                    <span className="subtitle text-xs sm:text-sm text-zinc-500 text-center">
                       Generating your 3D visualization...
                     </span>
                   </div>
