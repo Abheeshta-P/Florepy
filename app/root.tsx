@@ -65,10 +65,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           }}
         />
       </head>
-      <body>
+      <body className="min-h-screen flex flex-col bg-background text-foreground">
         <AuthProvider>
           <NavBar />
-          {children}
+          <div className="flex-1 flex flex-col">
+            {children}
+          </div>
           <Footer />
           <ScrollRestoration />
           <Scripts />
@@ -80,7 +82,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="flex-1 flex flex-col">
       <Outlet />
     </main>
   );
