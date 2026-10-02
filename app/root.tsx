@@ -1,16 +1,13 @@
 import {
-  isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
   Scripts,
-  ScrollRestoration,
+  ScrollRestoration
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { useEffect, useState } from "react";
-import { getCurrentUser, signIn as puterSignIn, signOut as puterSignOut } from "../lib/puter.action";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -30,9 +27,9 @@ export const links: Route.LinksFunction = () => [
   { rel: "manifest", href: "/site.webmanifest" },
 ];
 
-import NavBar from "../components/NavBar";
-import Footer from "../components/Footer";
 import { AuthProvider } from "../components/AuthProvider";
+import Footer from "../components/Footer";
+import NavBar from "../components/NavBar";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
