@@ -355,7 +355,7 @@ function VisualizerId() {
                   className="export"
                   disabled={!currentImage || isProcessing}
                 >
-                  <Download className="w-4 h-4 mr-2" /> Export
+                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> Export
                 </Button>
                 {isOwner ? (
                   <Button
@@ -364,7 +364,7 @@ function VisualizerId() {
                     className="share"
                     disabled={!currentImage || isProcessing || isSharing}
                   >
-                    <Share2 className="w-4 h-4 mr-2" /> Share
+                    <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> Share
                   </Button>
                 ) : (
                   <Button
@@ -375,11 +375,11 @@ function VisualizerId() {
                   >
                     {copied ? (
                       <>
-                        <Check className="w-4 h-4 mr-2 text-emerald-500" /> Copied!
+                        <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-emerald-500" /> Copied!
                       </>
                     ) : (
                       <>
-                        <Copy className="w-4 h-4 mr-2" /> Copy Link
+                        <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> Copy Link
                       </>
                     )}
                   </Button>

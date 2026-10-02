@@ -241,9 +241,9 @@ export default function Home() {
               <div className="flex justify-center mt-10">
                 <Link
                   to="/community"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-black transition-colors border border-zinc-200 hover:border-zinc-400 px-6 py-2.5 rounded-lg bg-white shadow-sm"
+                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-zinc-600 hover:text-black transition-colors border border-zinc-200 hover:border-zinc-400 px-4 py-2 sm:px-6 sm:py-2.5 rounded-lg bg-white shadow-xs"
                 >
-                  See all community projects <ArrowRight size={14} />
+                  See all community projects <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </Link>
               </div>
             </>

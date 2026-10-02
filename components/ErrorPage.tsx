@@ -87,9 +87,14 @@ export function ErrorPage({ error }: { error: unknown }) {
             {details}
           </p>
 
-          <Button size="md" variant="ghost" onClick={() => navigate("/")}>
-            Return Home
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 pt-2">
+            <Button size="md" variant="primary" onClick={() => navigate("/")}>
+              Return Home
+            </Button>
+            <Button size="md" variant="secondary" onClick={() => navigate(-1)}>
+              Go Back
+            </Button>
+          </div>
 
           {stack && (
             <div className="mt-12 text-left">

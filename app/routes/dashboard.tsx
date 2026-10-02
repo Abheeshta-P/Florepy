@@ -297,7 +297,7 @@ export default function Dashboard() {
             className="new-project-btn cursor-pointer"
             onClick={() => setShowModal(true)}
           >
-            <Plus className="w-4 h-4 mr-1.5" /> New Project
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> New Project
           </Button>
         </div>
 

@@ -59,14 +59,14 @@
 
 @layer components {
     .btn {
-        @apply inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+        @apply inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none;
 
         &.btn--primary {
-            @apply bg-primary text-white hover:bg-primary-hover shadow-sm;
+            @apply bg-primary text-white hover:bg-primary-hover shadow-xs;
         }
 
         &.btn--secondary {
-            @apply bg-white text-black border border-zinc-200 hover:bg-zinc-50 shadow-sm;
+            @apply bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 shadow-xs;
         }
 
         &.btn--ghost {
@@ -78,15 +78,15 @@
         }
 
         &.btn--sm {
-            @apply px-3 py-1.5 text-xs uppercase tracking-wide;
+            @apply px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs tracking-wide;
         }
 
         &.btn--md {
-            @apply px-5 py-2.5 text-sm;
+            @apply px-3.5 py-1.5 sm:px-5 sm:py-2.5 text-xs sm:text-sm;
         }
 
         &.btn--lg {
-            @apply px-8 py-3 text-sm uppercase tracking-wide font-bold;
+            @apply px-5 py-2 sm:px-8 sm:py-3 text-xs sm:text-sm uppercase tracking-wide font-bold;
         }
 
         &.btn--full {
@@ -144,15 +144,15 @@
                 }
 
                 .btn {
-                    @apply rounded-md;
+                    @apply rounded-lg;
                 }
 
                 .login {
-                    @apply text-xs font-bold uppercase tracking-wide text-zinc-900 hover:text-primary transition-colors;
+                    @apply text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-zinc-900 hover:text-primary transition-colors;
                 }
 
                 .cta {
-                    @apply inline-flex items-center justify-center rounded-md font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 text-xs uppercase tracking-wide bg-primary text-white hover:bg-primary-hover shadow-sm;
+                    @apply inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs tracking-wide bg-primary text-white hover:bg-primary-hover shadow-xs;
                 }
             }
         }
@@ -322,14 +322,14 @@
                 }
 
                 .panel-actions {
-                    @apply flex flex-wrap items-center gap-3;
+                    @apply flex flex-wrap items-center gap-2 sm:gap-3;
 
                     .export {
-                        @apply bg-primary text-white hover:bg-primary-hover h-9 border-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary;
+                        @apply bg-primary text-white hover:bg-primary-hover h-8 sm:h-9 px-2.5 sm:px-3 text-[11px] sm:text-xs rounded-lg border-none shadow-xs disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary;
                     }
 
                     .share {
-                        @apply bg-zinc-900 text-white h-9 shadow-sm hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-zinc-900;
+                        @apply bg-zinc-900 text-white h-8 sm:h-9 px-2.5 sm:px-3 text-[11px] sm:text-xs shadow-xs hover:bg-black transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-zinc-900;
                     }
                 }
             }
@@ -433,18 +433,18 @@
             }
 
             .actions {
-                @apply flex flex-col sm:flex-row gap-4 justify-center mb-16;
+                @apply flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-12 sm:mb-16;
 
                 .cta {
-                    @apply inline-flex items-center justify-center rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background px-8 py-3 text-sm uppercase tracking-wide font-bold bg-primary text-white hover:bg-primary-hover shadow-md;
+                    @apply inline-flex items-center justify-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background px-5 py-2 sm:px-8 sm:py-3 text-xs sm:text-sm uppercase tracking-wide font-bold bg-primary text-white hover:bg-primary-hover shadow-xs;
 
                     .icon {
-                        @apply ml-2 w-4 h-4;
+                        @apply ml-1.5 sm:ml-2 w-3.5 h-3.5 sm:w-4 sm:h-4;
                     }
                 }
 
                 .demo {
-                    @apply px-8 bg-white rounded-md hover:bg-zinc-50;
+                    @apply px-5 sm:px-8 py-2 sm:py-3 text-xs sm:text-sm uppercase tracking-wide font-bold bg-white rounded-lg hover:bg-zinc-50 border border-zinc-200 shadow-xs;
                 }
             }
 

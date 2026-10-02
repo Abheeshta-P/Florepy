@@ -138,18 +138,18 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
       )}
 
       {/* Action CTA Buttons */}
-      <div className="flex flex-wrap items-center justify-center gap-3 w-full max-w-md">
+      <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 w-full max-w-md">
         {isSignedIn ? (
           <Link
             to="/dashboard"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-primary hover:bg-primary-hover transition-colors shadow-xs"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-primary-hover transition-colors shadow-xs"
           >
             Go to Your Dashboard
           </Link>
         ) : (
           <Link
             to="/"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-primary hover:bg-primary-hover transition-colors shadow-xs"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-primary-hover transition-colors shadow-xs"
           >
             Back to Home
           </Link>
@@ -157,7 +157,7 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
 
         <Link
           to="/community"
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-zinc-700 bg-white border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors shadow-xs"
+          className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-zinc-800 bg-white border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors shadow-xs"
         >
           Explore Community
         </Link>
@@ -167,7 +167,7 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
+        className="mt-5 inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
       >
         <ArrowLeft size={13} />
         Go back to previous page
