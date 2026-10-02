@@ -5,7 +5,8 @@ import { useAuth } from "../../components/AuthProvider";
 import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
-import { Check, Copy, Download, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
+import EmptyState from "../../components/ui/EmptyState";
+import { Check, Copy, Download, FileQuestion, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
 import {
   createProject,
   getProjectById,
@@ -28,7 +29,7 @@ export function meta() {
 function VisualizerId() {
   // which user which id
   const { id } = useParams();
-  const { userId, userName } = useAuth();
+  const { userId, userName, isSignedIn } = useAuth();
 
   const navigate = useNavigate();
 
@@ -334,6 +335,17 @@ function VisualizerId() {
               </div>
             </div>
             <div className="render-area bg-zinc-200/50 min-h-125"></div>
+          </div>
+        ) : !project ? (
+          <div className="w-full flex items-center justify-center py-16">
+            <EmptyState
+              icon={<FileQuestion size={28} className="text-zinc-400" />}
+              title="Project Not Found"
+              description={`The project "${id}" doesn't exist or may have been deleted.`}
+              actionText={isSignedIn ? "Go to Dashboard" : "Go to Home"}
+              actionTo={isSignedIn ? "/dashboard" : "/"}
+              className="max-w-lg w-full"
+            />
           </div>
         ) : (
           <div className="panel shadow-sm">
