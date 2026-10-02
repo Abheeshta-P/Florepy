@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowRight, Clock, Globe, Plus } from "lucide-react";
-import { getCommunityProjects } from "../../lib/puter.action";
+import { getCommunityProjects, syncMissingPublicProjects } from "../../lib/puter.action";
 import { useAuth } from "../../components/AuthProvider";
 import Button from "../../components/ui/Button";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
@@ -36,6 +36,9 @@ export default function Community() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
+        if (isSignedIn) {
+          await syncMissingPublicProjects();
+        }
         const items = await getCommunityProjects();
         setProjects(items);
       } finally {
@@ -43,7 +46,7 @@ export default function Community() {
       }
     };
     fetchProjects();
-  }, []);
+  }, [isSignedIn]);
 
   return (
     <div className="community-page">

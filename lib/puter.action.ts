@@ -270,7 +270,7 @@ export const getCommunityProjects = async (): Promise<DesignItem[]> => {
       })
     );
 
-    return mapped;
+    return mapped.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   } catch (error) {
     console.error("Failed to get community projects", error);
     return [];
@@ -336,7 +336,7 @@ export const toggleProjectPublic = async ({
       const publicDir = `${PUBLIC_HOSTING_DIR}/project/${projectId}`;
       await puter.fs.mkdir(publicDir, { createMissingParents: true }).catch(() => {});
 
-      const exts = ["png", "jpg", "jpeg", "webp"];
+      const exts = ["png", "jpg", "jpeg", "webp", "svg"];
       for (const ext of exts) {
         try {
           const blob = await puter.fs.read(`project/${projectId}/source.${ext}`);
@@ -407,6 +407,41 @@ export const toggleProjectPublic = async ({
     sourceImage: displaySource,
     renderedImage: displayRender,
   };
+};
+
+/**
+ * Auto-heals any public projects in the authenticated user's store that might have failed
+ * to sync to the global community registry (e.g. network hiccup, prior worker sync error).
+ */
+export const syncMissingPublicProjects = async (): Promise<void> => {
+  try {
+    if (!PUTER_WORKER_URL || !puter.auth.isSignedIn()) return;
+
+    // Fetch user's personal projects
+    const personal = await getProjects();
+    const publicPersonal = personal.filter((p) => Boolean(p.isPublic));
+    if (publicPersonal.length === 0) return;
+
+    // Fetch current community registry list
+    const response = await callWorker(
+      `${PUTER_WORKER_URL}/api/projects/community`,
+      { method: "GET" }
+    );
+    if (!response.ok) return;
+
+    const data = (await response.json()) as { projects?: DesignItem[] | null };
+    const communityList = Array.isArray(data?.projects) ? data.projects : [];
+    const communityIds = new Set(communityList.map((c) => c.id));
+
+    // Identify and sync any personal public projects missing from the community registry
+    for (const proj of publicPersonal) {
+      if (!communityIds.has(proj.id)) {
+        await toggleProjectPublic({ project: proj, isPublic: true });
+      }
+    }
+  } catch (err) {
+    console.warn("Syncing public projects:", err);
+  }
 };
 
 export const deleteProject = async ({

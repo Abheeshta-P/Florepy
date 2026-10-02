@@ -7,6 +7,7 @@ import {
   HOSTING_CONFIG_KEY,
   imageUrlToPngBlob,
   isHostedUrl,
+  isDisplayableUrl,
 } from "./utils";
 
 // check if subdomain in keyvakue pair [KV STORE WORKERS]
@@ -79,12 +80,29 @@ export const uploadImageToHosting = async ({
   if (isHostedUrl(url)) return { url };
 
   try {
-    const resolved =
-      label === "rendered"
-        ? await imageUrlToPngBlob(url).then((blob) =>
-            blob ? { blob, contentType: "image/png" } : null,
-          )
-        : await fetchBlobFromUrl(url);
+    let resolved: { blob: Blob; contentType: string } | null = null;
+
+    // If url is a Puter FS path (e.g. project/123/source.png), read directly from Puter FS
+    if (url.startsWith("project/") || !isDisplayableUrl(url)) {
+      try {
+        const fsBlob = await puter.fs.read(url);
+        if (fsBlob && fsBlob.size > 0) {
+          const contentType = fsBlob.type || (url.endsWith(".svg") ? "image/svg+xml" : "image/png");
+          resolved = { blob: fsBlob, contentType };
+        }
+      } catch (err) {
+        console.warn("Could not read image from Puter FS in uploadImageToHosting:", url, err);
+      }
+    }
+
+    if (!resolved) {
+      resolved =
+        label === "rendered"
+          ? await imageUrlToPngBlob(url).then((blob) =>
+              blob ? { blob, contentType: "image/png" } : null,
+            )
+          : await fetchBlobFromUrl(url);
+    }
 
     if (!resolved) return null;
 

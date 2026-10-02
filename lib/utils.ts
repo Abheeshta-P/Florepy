@@ -3,10 +3,10 @@ export const HOSTING_DOMAIN_SUFFIX = ".puter.site";
 
 export const createHostingSlug = () => `florepy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-export const isHostedUrl = (value: unknown): value is string =>
+export const isHostedUrl = (value: unknown): boolean =>
   typeof value === "string" && value.includes(HOSTING_DOMAIN_SUFFIX);
 
-export const isDisplayableUrl = (value: unknown): value is string =>
+export const isDisplayableUrl = (value: unknown): boolean =>
   typeof value === "string" &&
   (value.startsWith("http://") ||
     value.startsWith("https://") ||

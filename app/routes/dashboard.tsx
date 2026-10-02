@@ -26,6 +26,7 @@ import {
   toggleProjectPublic,
   deleteProject,
   renameProject,
+  syncMissingPublicProjects,
 } from "../../lib/puter.action";
 import { validateServerUploadBoundary } from "../../lib/constants";
 
@@ -120,6 +121,7 @@ export default function Dashboard() {
       try {
         const items = await getProjects();
         setProjects(items);
+        void syncMissingPublicProjects();
       } finally {
         setIsLoading(false);
       }

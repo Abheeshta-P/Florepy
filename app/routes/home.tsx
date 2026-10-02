@@ -8,7 +8,11 @@ import ProjectImage from "../../components/ui/ProjectImage";
 import { Link, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { validateServerUploadBoundary } from "../../lib/constants";
-import { createProject, getCommunityProjects } from "../../lib/puter.action";
+import {
+  createProject,
+  getCommunityProjects,
+  syncMissingPublicProjects,
+} from "../../lib/puter.action";
 import { useAuth } from "../../components/AuthProvider";
 
 export function meta({}: Route.MetaArgs) {
@@ -121,6 +125,9 @@ export default function Home() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
+        if (isSignedIn) {
+          await syncMissingPublicProjects();
+        }
         const items = await getCommunityProjects();
         setProjects(items);
       } finally {
@@ -129,7 +136,7 @@ export default function Home() {
     };
 
     fetchProjects();
-  }, []);
+  }, [isSignedIn]);
 
   return (
     <div className="home">
@@ -187,8 +194,9 @@ export default function Home() {
           ) : projects.length > 0 ? (
             <>
               <div className="projects-grid">
-                {projects
-                  .slice(0, 6)
+                {[...projects]
+                  .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                  .slice(0, 3)
                   .map(
                     ({
                       id,
