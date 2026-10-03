@@ -80,10 +80,10 @@ export function ErrorPage({ error }: { error: unknown }) {
             />
           </svg>
 
-          <h1 className="text-4xl md:text-5xl font-serif font-semibold leading-snug text-zinc-900">
+          <h1 className="text-2xl md:text-4xl font-semibold leading-tight tracking-[-0.025em] text-zinc-900">
             {is404 ? "404 Not Found" : message}
           </h1>
-          <p className="text-zinc-600 leading-relaxed max-w-md mx-auto text-base">
+          <p className="text-zinc-500 leading-relaxed tracking-[-0.01em] max-w-md mx-auto text-sm md:text-base">
             {details}
           </p>
 

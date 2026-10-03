@@ -33,10 +33,10 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-zinc-100/80 border border-zinc-200/60 flex items-center justify-center text-zinc-600 mb-4 shadow-xs">
         {icon}
       </div>
-      <h3 className="text-xl md:text-2xl font-serif font-semibold text-zinc-900 mb-2 leading-snug">
+      <h3 className="text-lg md:text-xl font-semibold text-zinc-900 mb-2 leading-snug tracking-[-0.02em]">
         {title}
       </h3>
-      <p className="text-xs sm:text-sm md:text-base text-zinc-500 max-w-md mx-auto mb-6 leading-relaxed">
+      <p className="text-xs sm:text-sm md:text-base text-zinc-500 max-w-md mx-auto mb-6 leading-relaxed tracking-[-0.01em]">
         {description}
       </p>
       {actionText && (

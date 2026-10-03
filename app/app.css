@@ -9,8 +9,9 @@
     --color-primary-hover: #713f12;
     --color-secondary: #1e3a8a;
     --color-accent: #f97316;
-    --font-serif: "Playfair Display", serif;
-    --font-sans: Inter, sans-serif;
+    --font-serif: "Plus Jakarta Sans", sans-serif;
+    --font-sans: "Plus Jakarta Sans", sans-serif;
+    --font-mono: "Space Mono", monospace;
     --shadow-neobrutalism: 4px 4px 0px 0px rgba(0, 0, 0, 1);
 }
 
@@ -22,7 +23,7 @@
     body {
         background-color: #fdfbf7;
         color: #1a1a1a;
-        font-family: Inter, sans-serif;
+        font-family: "Plus Jakarta Sans", sans-serif;
         -webkit-font-smoothing: antialiased;
     }
 
@@ -32,8 +33,9 @@
     h4,
     h5,
     h6 {
-        font-family: "Playfair Display", serif;
+        font-family: "Plus Jakarta Sans", sans-serif;
         font-weight: 600;
+        letter-spacing: -0.025em;
         line-height: 1.25;
     }
 
@@ -123,7 +125,7 @@
                     }
 
                     .name {
-                        @apply text-xl font-serif font-semibold text-black;
+                        @apply text-base sm:text-lg font-bold tracking-[-0.025em] text-black;
                     }
                 }
 
@@ -173,7 +175,7 @@
             }
 
             h3 {
-                @apply text-xl font-serif font-semibold text-black mb-2;
+                @apply text-lg sm:text-xl font-semibold text-black mb-2 tracking-[-0.02em];
             }
 
             p {
@@ -280,7 +282,7 @@
                 }
 
                 .name {
-                    @apply text-xl font-serif font-semibold text-black;
+                    @apply text-base sm:text-lg font-bold tracking-[-0.025em] text-black;
                 }
             }
 
@@ -309,11 +311,11 @@
                     }
 
                     h2 {
-                        @apply text-xl md:text-2xl font-serif font-semibold text-black leading-snug;
+                        @apply text-lg md:text-xl font-semibold text-black leading-snug tracking-[-0.02em];
                     }
 
                     h3 {
-                        @apply text-base md:text-lg font-serif font-semibold text-black;
+                        @apply text-sm md:text-base font-semibold text-black tracking-[-0.015em];
                     }
 
                     .note {
@@ -425,11 +427,11 @@
             }
 
             h1 {
-                @apply text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-semibold leading-[1.2] md:leading-[1.18] text-black mb-8 max-w-5xl mx-auto;
+                @apply text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold leading-[1.15] tracking-[-0.03em] text-black mb-6 max-w-4xl mx-auto;
             }
 
             .subtitle {
-                @apply max-w-2xl mx-auto text-base md:text-lg text-zinc-500 mb-8 md:mb-10 leading-relaxed px-4 font-normal;
+                @apply max-w-2xl mx-auto text-sm sm:text-base md:text-[17px] text-zinc-500 mb-8 md:mb-10 leading-relaxed px-4 font-normal tracking-[-0.01em];
             }
 
             .actions {
@@ -476,7 +478,7 @@
                         }
 
                         h3 {
-                            @apply text-xl md:text-2xl font-serif font-semibold text-black leading-snug;
+                            @apply text-lg md:text-xl font-semibold text-black leading-snug tracking-[-0.02em];
                         }
 
                         p {
@@ -500,7 +502,7 @@
                         @apply max-w-2xl;
 
                         h2 {
-                            @apply text-3xl md:text-4xl font-serif font-semibold text-black mb-3 md:mb-4 leading-snug;
+                            @apply text-2xl md:text-3xl font-semibold text-black mb-2.5 md:mb-3 leading-snug tracking-[-0.025em];
                         }
 
                         p {
@@ -539,7 +541,7 @@
                             @apply p-5 flex justify-between items-center bg-white border-t border-zinc-100 grow;
 
                             h3 {
-                                @apply text-base md:text-lg font-serif font-semibold text-zinc-900 leading-snug transition-colors;
+                                @apply text-sm sm:text-base font-semibold text-zinc-900 leading-snug transition-colors tracking-[-0.015em];
                             }
 
                             .meta {
@@ -595,7 +597,7 @@
             @apply max-w-7xl mx-auto flex flex-row items-center justify-between gap-3 sm:gap-6 flex-nowrap w-full;
 
             .footer-brand {
-                @apply flex items-center gap-1.5 sm:gap-2 font-serif font-semibold text-foreground text-xs sm:text-base md:text-lg shrink-0;
+                @apply flex items-center gap-1.5 sm:gap-2 font-bold tracking-[-0.025em] text-foreground text-xs sm:text-base shrink-0;
 
                 img {
                     @apply opacity-90;
@@ -624,7 +626,7 @@
 
             .dash-greeting {
                 h1 {
-                    @apply text-3xl md:text-4xl font-serif font-semibold text-black leading-snug;
+                    @apply text-2xl md:text-3xl font-semibold text-black leading-snug tracking-[-0.02em];
                 }
                 p {
                     @apply text-zinc-500 text-sm mt-1;
@@ -660,7 +662,7 @@
                 @apply flex items-center justify-between mb-8;
 
                 h2 {
-                    @apply text-2xl md:text-3xl font-serif font-semibold text-black leading-snug;
+                    @apply text-xl md:text-2xl font-semibold text-black leading-snug tracking-[-0.02em];
                 }
 
                 .new-project-btn {
@@ -677,7 +679,7 @@
             @apply text-center pt-2 pb-8 md:pt-4 md:pb-10 max-w-3xl mx-auto;
 
             h1 {
-                @apply text-3xl md:text-4xl lg:text-5xl font-serif font-semibold text-black mb-3 md:mb-4 leading-snug;
+                @apply text-2xl sm:text-3xl md:text-4xl font-semibold text-black mb-2.5 md:mb-3 leading-tight tracking-[-0.025em];
             }
 
             p {
@@ -711,7 +713,7 @@
                 @apply p-5 flex justify-between items-center bg-white border-t border-zinc-100 grow;
 
                 h3 {
-                    @apply text-base md:text-lg font-serif font-semibold text-zinc-900 leading-snug transition-colors;
+                    @apply text-sm sm:text-base font-semibold text-zinc-900 leading-snug transition-colors tracking-[-0.015em];
                 }
 
                 .meta {

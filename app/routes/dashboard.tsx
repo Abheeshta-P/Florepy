@@ -369,7 +369,7 @@ export default function Dashboard() {
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-base font-serif font-semibold text-zinc-900 bg-white border border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary rounded px-2 py-0.5 outline-none w-full max-w-[180px] sm:max-w-[210px] shadow-xs leading-snug"
+                            className="text-sm sm:text-base font-semibold text-zinc-900 bg-white border border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary rounded px-2 py-0.5 outline-none w-full max-w-[180px] sm:max-w-[210px] shadow-xs leading-snug tracking-[-0.015em]"
                             autoFocus
                             disabled={isRenaming}
                           />

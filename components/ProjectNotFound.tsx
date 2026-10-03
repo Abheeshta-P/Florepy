@@ -100,7 +100,7 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
             <span className="font-mono text-[8px] uppercase tracking-widest text-primary font-semibold">
               Floor Plan
             </span>
-            <span className="font-serif text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 leading-none my-0.5">
+            <span className="text-xl md:text-2xl font-bold tracking-[-0.03em] text-zinc-900 leading-none my-0.5">
               404
             </span>
             <span className="text-[8px] font-mono uppercase tracking-wider text-zinc-400">
@@ -119,12 +119,12 @@ export const ProjectNotFound: React.FC<ProjectNotFoundProps> = ({ id, className 
       </div>
 
       {/* Heading */}
-      <h1 className="text-3xl md:text-5xl font-serif font-bold text-zinc-900 tracking-tight mb-4">
+      <h1 className="text-2xl md:text-4xl font-semibold text-zinc-900 tracking-[-0.025em] leading-tight mb-3">
         Missing Visualization
       </h1>
 
       {/* Description */}
-      <p className="text-zinc-600 text-sm md:text-base max-w-lg mx-auto leading-relaxed mb-3">
+      <p className="text-zinc-500 text-sm md:text-base max-w-lg mx-auto leading-relaxed tracking-[-0.01em] mb-4">
         We couldn&apos;t find the architectural project you&apos;re looking for.
         It may have been removed, set to private, or the link may be mistyped.
       </p>
