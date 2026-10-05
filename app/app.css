@@ -21,7 +21,7 @@
     }
 
     body {
-        background-color: #fdfbf7;
+        background-color: var(--color-background);
         color: #1a1a1a;
         font-family: "Plus Jakarta Sans", sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -46,7 +46,7 @@
     }
 
     ::-webkit-scrollbar-track {
-        background: #fdfbf7;
+        background: var(--color-background);
     }
 
     ::-webkit-scrollbar-thumb {

@@ -18,6 +18,7 @@ import Modal from "../../components/ui/Modal";
 import ProjectSkeleton from "../../components/ui/ProjectSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
 import ProjectImage from "../../components/ui/ProjectImage";
+import Pagination from "../../components/ui/Pagination";
 import Upload from "../../components/Upload";
 import { useAuth } from "../../components/AuthProvider";
 import {
@@ -52,6 +53,9 @@ export default function Dashboard() {
   const [editName, setEditName] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const isCreatingProjectRef = useRef(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 3;
 
   useEffect(() => {
     if (location.state?.openUpload) {
@@ -94,7 +98,14 @@ export default function Dashboard() {
         isPublic: Boolean(projectToDelete.isPublic),
       });
       if (success) {
-        setProjects((prev) => prev.filter((p) => p.id !== projectToDelete.id));
+        setProjects((prev) => {
+          const next = prev.filter((p) => p.id !== projectToDelete.id);
+          const nextTotalPages = Math.ceil(next.length / ITEMS_PER_PAGE) || 1;
+          if (currentPage > nextTotalPages) {
+            setCurrentPage(nextTotalPages);
+          }
+          return next;
+        });
         closeDeleteModal();
       }
     } catch (err) {
@@ -108,6 +119,14 @@ export default function Dashboard() {
   const totalProjects = projects.length;
   const privateCount = projects.filter((p) => !p.isPublic).length;
   const publicCount = projects.filter((p) => Boolean(p.isPublic)).length;
+
+  const totalPages = Math.ceil(totalProjects / ITEMS_PER_PAGE) || 1;
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedProjects = projects.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE,
+  );
 
   useEffect(() => {
     if (!isAuthLoading && !isSignedIn) {
@@ -157,6 +176,7 @@ export default function Dashboard() {
       if (!saved) return false;
 
       setProjects((prev) => [saved, ...prev]);
+      setCurrentPage(1);
       setShowModal(false);
       navigate(`/visualizer/${newId}`, {
         state: {
@@ -304,8 +324,9 @@ export default function Dashboard() {
         {isPageLoading ? (
           <ProjectSkeleton count={3} />
         ) : projects.length > 0 ? (
-          <div className="projects-grid">
-            {projects.map((project) => {
+          <>
+            <div className="projects-grid">
+              {paginatedProjects.map((project) => {
               const {
                 id,
                 name,
@@ -422,6 +443,17 @@ export default function Dashboard() {
               );
             })}
           </div>
+
+            <Pagination
+              currentPage={safeCurrentPage}
+              totalPages={totalPages}
+              totalItems={totalProjects}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={(page) => {
+                setCurrentPage(page);
+              }}
+            />
+          </>
         ) : (
           <EmptyState
             title="No projects yet"
