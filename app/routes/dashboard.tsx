@@ -30,6 +30,8 @@ import {
   syncMissingPublicProjects,
 } from "../../lib/puter.action";
 import { validateServerUploadBoundary } from "../../lib/constants";
+import { copyTextToClipboard } from "../../lib/utils";
+import Pill from "../../components/ui/Pill";
 
 export function meta() {
   return [{ title: "Dashboard - Florepy" }];
@@ -81,9 +83,11 @@ export default function Dashboard() {
   const handleCopyProjectName = async () => {
     if (!targetDeleteName) return;
     try {
-      await navigator.clipboard.writeText(targetDeleteName);
-      setCopiedName(true);
-      setTimeout(() => setCopiedName(false), 2000);
+      const success = await copyTextToClipboard(targetDeleteName);
+      if (success) {
+        setCopiedName(true);
+        setTimeout(() => setCopiedName(false), 2000);
+      }
     } catch (err) {
       console.error("Failed to copy project name:", err);
     }
@@ -119,6 +123,9 @@ export default function Dashboard() {
   const totalProjects = projects.length;
   const privateCount = projects.filter((p) => !p.isPublic).length;
   const publicCount = projects.filter((p) => Boolean(p.isPublic)).length;
+  const inReviewCount = projects.filter(
+    (p) => Array.isArray(p.reviews) && p.reviews.some((r) => !r.resolved)
+  ).length;
 
   const totalPages = Math.ceil(totalProjects / ITEMS_PER_PAGE) || 1;
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -299,6 +306,17 @@ export default function Dashboard() {
             {isPageLoading ? (
               <div className="w-7 h-5 bg-zinc-200 animate-pulse rounded my-0.5" />
             ) : (
+              <span className={`stat-value`}>
+                {inReviewCount}
+              </span>
+            )}
+            <span className="stat-label">In Review</span>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat-pill">
+            {isPageLoading ? (
+              <div className="w-7 h-5 bg-zinc-200 animate-pulse rounded my-0.5" />
+            ) : (
               <span className="stat-value">{publicCount}</span>
             )}
             <span className="stat-label">Public</span>
@@ -430,9 +448,28 @@ export default function Dashboard() {
                           </button>
                         </div>
                       )}
-                      <div className="meta">
-                        <Clock size={12} />
-                        <span>{new Date(timestamp).toLocaleDateString()}</span>
+                      <div className="meta flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <Clock size={12} />
+                          <span>
+                            {new Date(timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {Array.isArray(project.reviews) &&
+                          project.reviews.length > 0 &&
+                          project.reviews.some((r) => !r.resolved) && (
+                            <Pill
+                              dotColor="primary"
+                              pulse
+                              className="!px-1.5 !py-0.5 !gap-1"
+                            >
+                              {
+                                project.reviews.filter((r) => !r.resolved)
+                                  .length
+                              }{" "}
+                              reviews
+                            </Pill>
+                          )}
                       </div>
                     </div>
                     <div className="arrow shrink-0">

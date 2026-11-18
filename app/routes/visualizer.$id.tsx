@@ -1,28 +1,51 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
 import puter from "@heyputer/puter.js";
 import { useAuth } from "../../components/AuthProvider";
 import { generate3DView } from "../../lib/ai.action";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import ProjectNotFound from "../../components/ProjectNotFound";
-import { Check, Copy, Download, Globe, Loader2, Lock, RefreshCcw, Share2, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  Globe,
+  Loader2,
+  Lock,
+  MessageSquare,
+  Pencil,
+  RefreshCcw,
+  Share2,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   createProject,
+  ensureHostedReviewImages,
   getProjectById,
   resolveDisplayUrl,
   toggleProjectPublic,
+  updateProjectReviews,
 } from "../../lib/puter.action";
 import {
   ReactCompareSlider,
   ReactCompareSliderImage,
 } from "react-compare-slider";
-import { fetchBlobFromUrl, getImageExtension, isDisplayableUrl } from "../../lib/utils";
+import {
+  fetchBlobFromUrl,
+  getImageExtension,
+  isDisplayableUrl,
+  copyTextToClipboard,
+} from "../../lib/utils";
 
 export function meta() {
   return [
     { title: "Visualizer - Florepy" },
-    { name: "description", content: "View and compare your architectural visualizations." }
+    {
+      name: "description",
+      content: "View and compare your architectural visualizations.",
+    },
   ];
 }
 
@@ -32,6 +55,10 @@ function VisualizerId() {
   const { userId, userName, isSignedIn } = useAuth();
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const searchParams = new URLSearchParams(location.search);
+  const reviewTokenFromUrl = searchParams.get("review");
 
   const hasInitialGenerated = useRef(false);
 
@@ -39,11 +66,168 @@ function VisualizerId() {
   // came to this page after the generation or to generate
   // when coming to this page only get from BE
   const [currentImage, setCurrentImage] = useState<string | null>(null);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [project, setProject] = useState<DesignItem | null>(null);
   const [isProjectLoading, setIsProjectLoading] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [shareTab, setShareTab] = useState<"review" | "public">("review");
   const [isSharing, setIsSharing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedReview, setCopiedReview] = useState(false);
+  const [enablePasscode, setEnablePasscode] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState("");
+  const [isSavingPasscode, setIsSavingPasscode] = useState(false);
+  const [passcodeToast, setPasscodeToast] = useState<string | null>(null);
+
+  // Review interaction states
+  const [isReviewLocked, setIsReviewLocked] = useState(false);
+  const [enteredPasscode, setEnteredPasscode] = useState("");
+  const [passcodeError, setPasscodeError] = useState(false);
+  const [activeReviewId, setActiveReviewId] = useState<string | null>(null);
+  const [isPlacingReview, setIsPlacingReview] = useState(false);
+  const [pendingReviewPin, setPendingReviewPin] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [reviewerName, setReviewerName] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("florepy_reviewer_name") || "";
+    }
+    return "";
+  });
+  const [reviewText, setReviewText] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewLockedView, setReviewLockedView] = useState<"3d" | "plan">("3d");
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editingReviewText, setEditingReviewText] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [myReviewIds, setMyReviewIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined" && id) {
+      try {
+        const stored = localStorage.getItem(`florepy_my_reviews_${id}`);
+        return stored ? JSON.parse(stored) : [];
+      } catch {}
+    }
+    return [];
+  });
+
+  const isAddingComment = Boolean(isPlacingReview || pendingReviewPin);
+
+  useEffect(() => {
+    if (isSignedIn && userName) {
+      setReviewerName(userName);
+    }
+  }, [isSignedIn, userName]);
+
+  useEffect(() => {
+    setIsImageLoaded(false);
+  }, [currentImage]);
+
+  const renderAreaRef = useRef<HTMLDivElement>(null);
+  const [imageNaturalSize, setImageNaturalSize] = useState<{
+    width: number;
+    height: number;
+  }>({
+    width: 1024,
+    height: 1024,
+  });
+  const [imageBounds, setImageBounds] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
+
+  const activeImageUrl =
+    reviewLockedView === "plan" && project?.sourceImage
+      ? project.sourceImage
+      : currentImage;
+
+  useEffect(() => {
+    if (!activeImageUrl || typeof window === "undefined") return;
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        setImageNaturalSize({
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+      }
+    };
+    img.src = activeImageUrl;
+  }, [activeImageUrl]);
+
+  const updateImageBounds = useCallback(() => {
+    if (!renderAreaRef.current) return;
+    const rect = renderAreaRef.current.getBoundingClientRect();
+    const cW = rect.width;
+    const cH = rect.height;
+    if (!cW || !cH) return;
+
+    const naturalW = imageNaturalSize.width || 1024;
+    const naturalH = imageNaturalSize.height || 1024;
+    const imgAspect = naturalW / naturalH;
+    const containerAspect = cW / cH;
+
+    let renderedW = cW;
+    let renderedH = cH;
+    let left = 0;
+    let top = 0;
+
+    if (containerAspect > imgAspect) {
+      // Container is wider than the image -> letterbox on left and right
+      renderedH = cH;
+      renderedW = cH * imgAspect;
+      left = (cW - renderedW) / 2;
+      top = 0;
+    } else {
+      // Container is taller than the image -> letterbox on top and bottom
+      renderedW = cW;
+      renderedH = cW / imgAspect;
+      left = 0;
+      top = (cH - renderedH) / 2;
+    }
+
+    setImageBounds({
+      left: Math.round(left * 10) / 10,
+      top: Math.round(top * 10) / 10,
+      width: Math.round(renderedW * 10) / 10,
+      height: Math.round(renderedH * 10) / 10,
+    });
+  }, [imageNaturalSize]);
+
+  useEffect(() => {
+    updateImageBounds();
+    if (typeof window === "undefined" || !renderAreaRef.current) return;
+
+    const observer = new ResizeObserver(() => {
+      updateImageBounds();
+    });
+
+    observer.observe(renderAreaRef.current);
+    window.addEventListener("resize", updateImageBounds);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateImageBounds);
+    };
+  }, [updateImageBounds]);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    setIsImageLoaded(true);
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      setImageNaturalSize({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    }
+  };
 
   const isOwner =
     project?.isOwner !== undefined
@@ -52,22 +236,180 @@ function VisualizerId() {
           (userId && project?.ownerId && userId === project.ownerId) ||
           (userName &&
             project?.ownerName &&
-            userName.toLowerCase() === project.ownerName.toLowerCase())
+            userName.toLowerCase() === project.ownerName.toLowerCase()),
         );
+
+  const isClientReviewMode = Boolean(
+    !isOwner &&
+    reviewTokenFromUrl &&
+    project?.reviewToken &&
+    reviewTokenFromUrl === project.reviewToken,
+  );
+
+  // Review permissions:
+  // "Add Review" is strictly for clients viewing the shared review link.
+  // The owner is the creator/builder and views/resolves reviews, without adding reviews to their own project.
+  const canAddReview = isClientReviewMode;
+
+  // Reviews pins are ONLY visible once the picture is fully loaded, not locked, and not processing
+  const areReviewsVisible = Boolean(
+    isImageLoaded && !isReviewLocked && !isProjectLoading && !isProcessing,
+  );
 
   const copyShareLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      const publicUrl = `${window.location.origin}/visualizer/${id}`;
+      const success = await copyTextToClipboard(publicUrl);
+      if (success) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }
     } catch (err) {
       console.error("Failed to copy link:", err);
     }
   };
 
+  const getClientReviewUrl = () => {
+    if (!id || !project?.reviewToken) return "";
+    return `${window.location.origin}/visualizer/${id}?review=${project.reviewToken}`;
+  };
+
+  const copyClientReviewLink = async () => {
+    try {
+      let token = project?.reviewToken;
+      if (!token && isOwner && project?.id) {
+        token = `rev_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+        setProject((prev) => (prev ? { ...prev, reviewToken: token } : prev));
+      }
+
+      const reviewUrl = `${window.location.origin}/visualizer/${id}?review=${token || ""}`;
+
+      // Copy immediately while user interaction gesture is active
+      const copiedOk = await copyTextToClipboard(reviewUrl);
+      if (copiedOk) {
+        setCopiedReview(true);
+        setTimeout(() => setCopiedReview(false), 2500);
+      }
+
+      // Sync hosted images and token in background if needed without delaying clipboard
+      if (project?.id) {
+        void ensureHostedReviewImages(project)
+          .then((hosted) =>
+            updateProjectReviews({
+              projectId: project.id,
+              reviewToken: token,
+              reviewPasscode: project.reviewPasscode,
+              reviews: project.reviews || [],
+              sourceImage: hosted.sourceImage,
+              renderedImage: hosted.renderedImage,
+              action: "sync",
+            }),
+          )
+          .catch((syncErr) => {
+            console.warn("Background review sync after copy:", syncErr);
+          });
+      }
+    } catch (err) {
+      console.error("Failed to copy client review link:", err);
+    }
+  };
+
   const handleShareClick = () => {
     if (!isOwner) return;
+
+    let token = project?.reviewToken;
+    if (!token && project?.id) {
+      token = `rev_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+      setProject((prev) => (prev ? { ...prev, reviewToken: token } : prev));
+    }
+
+    setEnablePasscode(Boolean(project?.reviewPasscode));
+    setPasscodeInput(project?.reviewPasscode || "");
+    setPasscodeToast(null);
     setShowShareModal(true);
+
+    // Sync hosted review images and worker index in background without lagging the UI
+    if (project?.id) {
+      void (async () => {
+        try {
+          const hosted = await ensureHostedReviewImages(project);
+          await updateProjectReviews({
+            projectId: project.id,
+            reviewToken: token,
+            reviewPasscode: project.reviewPasscode,
+            reviews: project.reviews || [],
+            sourceImage: hosted.sourceImage,
+            renderedImage: hosted.renderedImage,
+            action: "sync",
+          });
+          if (hosted.sourceImage || hosted.renderedImage) {
+            setProject((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    reviewToken: token,
+                    sourceImage: hosted.sourceImage || prev.sourceImage,
+                    renderedImage: hosted.renderedImage || prev.renderedImage,
+                  }
+                : prev,
+            );
+          }
+        } catch (err) {
+          console.warn("Background share sync failed:", err);
+        }
+      })();
+    }
+  };
+
+  const handleTogglePasscode = async (checked: boolean) => {
+    setEnablePasscode(checked);
+    setPasscodeToast(null);
+
+    if (!checked) {
+      setPasscodeInput("");
+      if (!project?.id || !isOwner) return;
+      try {
+        setIsSavingPasscode(true);
+        setProject((prev) => (prev ? { ...prev, reviewPasscode: null } : prev));
+        await updateProjectReviews({
+          projectId: project.id,
+          reviewToken: project.reviewToken,
+          reviewPasscode: null,
+          reviews: project.reviews || [],
+          action: "sync",
+        });
+        setPasscodeToast("Passcode removed");
+        setTimeout(() => setPasscodeToast(null), 2200);
+      } catch (err) {
+        console.error("Failed to clear passcode:", err);
+      } finally {
+        setIsSavingPasscode(false);
+      }
+    } else {
+      setPasscodeInput(project?.reviewPasscode || "");
+    }
+  };
+
+  const handleSavePasscode = async () => {
+    if (!project?.id || !isOwner || !passcodeInput.trim()) return;
+    try {
+      setIsSavingPasscode(true);
+      const newPasscode = passcodeInput.trim();
+      await updateProjectReviews({
+        projectId: project.id,
+        reviewToken: project.reviewToken,
+        reviewPasscode: newPasscode,
+        reviews: project.reviews || [],
+        action: "sync",
+      });
+      setProject((prev) =>
+        prev ? { ...prev, reviewPasscode: newPasscode } : prev,
+      );
+      setPasscodeToast("Passcode saved!");
+      setTimeout(() => setPasscodeToast(null), 2200);
+    } finally {
+      setIsSavingPasscode(false);
+    }
   };
 
   const handleConfirmShare = async () => {
@@ -105,6 +447,216 @@ function VisualizerId() {
     } finally {
       setIsSharing(false);
     }
+  };
+
+  const handleUnlockPasscode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project?.reviewPasscode) return;
+    if (enteredPasscode.trim() === project.reviewPasscode.trim()) {
+      setIsReviewLocked(false);
+      setPasscodeError(false);
+      sessionStorage.setItem(`florepy_unlocked_${id}`, "true");
+    } else {
+      setPasscodeError(true);
+    }
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      !canAddReview ||
+      !isPlacingReview ||
+      !areReviewsVisible ||
+      !renderAreaRef.current
+    )
+      return;
+    const rect = renderAreaRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    const bounds =
+      imageBounds.width > 0
+        ? imageBounds
+        : { left: 0, top: 0, width: rect.width, height: rect.height };
+
+    // Ignore clicks outside the actual image (in empty letterbox margins)
+    if (
+      clickX < bounds.left ||
+      clickX > bounds.left + bounds.width ||
+      clickY < bounds.top ||
+      clickY > bounds.top + bounds.height
+    ) {
+      return;
+    }
+
+    const x = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(((clickX - bounds.left) / bounds.width) * 1000) / 10,
+      ),
+    );
+    const y = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(((clickY - bounds.top) / bounds.height) * 1000) / 10,
+      ),
+    );
+
+    setPendingReviewPin({ x, y });
+    setIsPlacingReview(false);
+  };
+
+  // Owner cannot edit comments at all; only the author who created it can edit
+  const canEditReview = (rev: ProjectReview) => {
+    if (isOwner) return false;
+    if (myReviewIds.includes(rev.id)) return true;
+    const currentAuthorName = (isSignedIn && userName ? userName : reviewerName)
+      .trim()
+      .toLowerCase();
+    if (currentAuthorName && rev.author.toLowerCase() === currentAuthorName)
+      return true;
+    return false;
+  };
+
+  // Owner can delete ONLY if the review is resolved; client author can delete their own review
+  const canDeleteReview = (rev: ProjectReview) => {
+    if (isOwner) {
+      return Boolean(rev.resolved);
+    }
+    if (myReviewIds.includes(rev.id)) return true;
+    const currentAuthorName = (isSignedIn && userName ? userName : reviewerName)
+      .trim()
+      .toLowerCase();
+    if (currentAuthorName && rev.author.toLowerCase() === currentAuthorName)
+      return true;
+    return false;
+  };
+
+  const handleAddReview = async () => {
+    const author = (isSignedIn && userName ? userName : reviewerName).trim();
+    if (!project?.id || !pendingReviewPin || !reviewText.trim() || !author)
+      return;
+
+    try {
+      setIsSubmittingReview(true);
+      const newReview: ProjectReview = {
+        id: `rev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        x: pendingReviewPin.x,
+        y: pendingReviewPin.y,
+        author,
+        text: reviewText.trim(),
+        createdAt: Date.now(),
+        resolved: false,
+      };
+
+      const updatedReviews = [...(project.reviews || []), newReview];
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("florepy_reviewer_name", author);
+        try {
+          const updatedMyIds = [...myReviewIds, newReview.id];
+          setMyReviewIds(updatedMyIds);
+          localStorage.setItem(
+            `florepy_my_reviews_${project.id}`,
+            JSON.stringify(updatedMyIds),
+          );
+        } catch {}
+      }
+
+      setProject((prev) =>
+        prev ? { ...prev, reviews: updatedReviews } : prev,
+      );
+      setPendingReviewPin(null);
+      setReviewText("");
+
+      // Keep multi-review mode active so client can place next pin immediately!
+      setIsPlacingReview(true);
+
+      await updateProjectReviews({
+        projectId: project.id,
+        reviewToken: reviewTokenFromUrl || project.reviewToken,
+        review: newReview,
+        action: "add",
+      });
+    } catch (err) {
+      console.error("Failed to add review pin:", err);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleToggleResolveReview = async (reviewId: string) => {
+    if (!project?.id || !isOwner) return;
+
+    const targetReview = (project.reviews || []).find((r) => r.id === reviewId);
+    const newResolved = !targetReview?.resolved;
+
+    const updatedReviews = (project.reviews || []).map((r) =>
+      r.id === reviewId ? { ...r, resolved: newResolved } : r,
+    );
+
+    setProject((prev) => (prev ? { ...prev, reviews: updatedReviews } : prev));
+
+    await updateProjectReviews({
+      projectId: project.id,
+      reviewToken: project.reviewToken,
+      reviewId,
+      resolved: newResolved,
+      action: "resolve",
+    });
+  };
+
+  const handleEditReview = async (reviewId: string) => {
+    if (!project?.id || !editingReviewText.trim()) return;
+    const targetRev = (project.reviews || []).find((r) => r.id === reviewId);
+    if (!targetRev || !canEditReview(targetRev)) return;
+
+    try {
+      setIsSavingEdit(true);
+      const updatedText = editingReviewText.trim();
+      const updatedReviews = (project.reviews || []).map((r) =>
+        r.id === reviewId ? { ...r, text: updatedText } : r,
+      );
+
+      setProject((prev) =>
+        prev ? { ...prev, reviews: updatedReviews } : prev,
+      );
+      setEditingReviewId(null);
+      setEditingReviewText("");
+
+      await updateProjectReviews({
+        projectId: project.id,
+        reviewToken: reviewTokenFromUrl || project.reviewToken,
+        reviewId,
+        text: updatedText,
+        action: "edit",
+      });
+    } catch (err) {
+      console.error("Failed to edit review:", err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!project?.id) return;
+    const targetRev = (project.reviews || []).find((r) => r.id === reviewId);
+    if (!targetRev || !canDeleteReview(targetRev)) return;
+
+    const updatedReviews = (project.reviews || []).filter(
+      (r) => r.id !== reviewId,
+    );
+
+    setProject((prev) => (prev ? { ...prev, reviews: updatedReviews } : prev));
+    if (activeReviewId === reviewId) setActiveReviewId(null);
+
+    await updateProjectReviews({
+      projectId: project.id,
+      reviewToken: reviewTokenFromUrl || project.reviewToken,
+      reviewId,
+      action: "delete",
+    });
   };
 
   const handleExport = async () => {
@@ -166,10 +718,9 @@ function VisualizerId() {
       if (result.renderedImage) {
         // Retain the generated data URL immediately for instant feedback
         const displayableRender = result.renderedImage;
-        const displayableSource =
-          isDisplayableUrl(project?.sourceImage)
-            ? project!.sourceImage!
-            : item.sourceImage;
+        const displayableSource = isDisplayableUrl(project?.sourceImage)
+          ? project!.sourceImage!
+          : item.sourceImage;
 
         setCurrentImage(displayableRender);
 
@@ -190,17 +741,16 @@ function VisualizerId() {
         const saved = await createProject({
           item: updatedItem,
           isPublic: isProjectPublic,
+          isUpdate: true,
         });
 
         if (saved) {
-          const finalSource =
-            isDisplayableUrl(saved.sourceImage)
-              ? saved.sourceImage
-              : displayableSource;
-          const finalRender =
-            isDisplayableUrl(saved.renderedImage)
-              ? saved.renderedImage
-              : displayableRender;
+          const finalSource = isDisplayableUrl(saved.sourceImage)
+            ? saved.sourceImage
+            : displayableSource;
+          const finalRender = isDisplayableUrl(saved.renderedImage)
+            ? saved.renderedImage
+            : displayableRender;
 
           setProject({
             ...saved,
@@ -215,7 +765,7 @@ function VisualizerId() {
                   ...prev,
                   renderedImage: displayableRender,
                 }
-              : prev
+              : prev,
           );
         }
       }
@@ -237,11 +787,33 @@ function VisualizerId() {
 
       setIsProjectLoading(true);
 
-      const fetchedProject = await getProjectById({ id });
+      const fetchedProject = await getProjectById({
+        id,
+        reviewToken: reviewTokenFromUrl,
+      });
 
       if (!isMounted) return;
 
       if (fetchedProject) {
+        // Check if project has a review passcode enabled and caller is a client
+        const storedPasscode = fetchedProject.reviewPasscode;
+        const callerIsOwner = Boolean(
+          (userId &&
+            fetchedProject.ownerId &&
+            userId === fetchedProject.ownerId) ||
+          (userName &&
+            fetchedProject.ownerName &&
+            userName.toLowerCase() === fetchedProject.ownerName.toLowerCase()),
+        );
+
+        if (!callerIsOwner && reviewTokenFromUrl && storedPasscode) {
+          const unlockedKey = `florepy_unlocked_${id}`;
+          const isSessionUnlocked =
+            sessionStorage.getItem(unlockedKey) === "true";
+          if (!isSessionUnlocked) {
+            setIsReviewLocked(true);
+          }
+        }
         let sourceUrl = fetchedProject.sourceImage;
         let renderUrl = fetchedProject.renderedImage;
 
@@ -282,7 +854,9 @@ function VisualizerId() {
     if (project?.sourceImage && !isDisplayableUrl(project.sourceImage)) {
       resolveDisplayUrl(project.sourceImage).then((resolved) => {
         if (isCurrent && resolved && isDisplayableUrl(resolved)) {
-          setProject((prev) => (prev ? { ...prev, sourceImage: resolved } : prev));
+          setProject((prev) =>
+            prev ? { ...prev, sourceImage: resolved } : prev,
+          );
         }
       });
     }
@@ -345,17 +919,42 @@ function VisualizerId() {
                 <p>Project</p>
                 <h2>{project?.name || `Residence ${id}`}</h2>
                 <p className="note">
-                  Created by {isOwner ? "you" : (project?.ownerName || "Community Member")} &bull; Drag slider to compare
+                  Created by{" "}
+                  {isOwner ? "you" : project?.ownerName || "Community Member"}{" "}
+                  &bull; Drag slider to compare
                 </p>
               </div>
-              <div className="panel-actions">
+              <div className="panel-actions flex items-center gap-1.5 sm:gap-2">
+                {canAddReview && areReviewsVisible && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      if (!isPlacingReview) {
+                        setReviewLockedView("3d");
+                      }
+                      setIsPlacingReview(!isPlacingReview);
+                      setActiveReviewId(null);
+                    }}
+                    className={`h-8 sm:h-9 w-22 sm:w-24 px-2.5 sm:px-3 text-[11px] sm:text-xs rounded-lg shadow-xs flex items-center justify-center transition-colors ${
+                      isPlacingReview
+                        ? "!text-primary font-semibold"
+                        : "text-zinc-800 font-medium"
+                    }`}
+                    disabled={isProcessing}
+                    title="Lock into 3D view and drop a review pin"
+                  >
+                    <span>{isPlacingReview ? "Done" : "Add Review"}</span>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={handleExport}
                   className="export"
                   disabled={!currentImage || isProcessing}
                 >
-                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> Export
+                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />{" "}
+                  Export
                 </Button>
                 {isOwner ? (
                   <Button
@@ -364,7 +963,8 @@ function VisualizerId() {
                     className="share"
                     disabled={!currentImage || isProcessing || isSharing}
                   >
-                    <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> Share
+                    <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />{" "}
+                    Share
                   </Button>
                 ) : (
                   <Button
@@ -375,28 +975,72 @@ function VisualizerId() {
                   >
                     {copied ? (
                       <>
-                        <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-emerald-500" /> Copied!
+                        <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-emerald-500" />{" "}
+                        Copied!
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> Copy Link
+                        <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />{" "}
+                        Copy Link
                       </>
                     )}
                   </Button>
                 )}
               </div>
             </div>
-            <div className={`render-area ${isProcessing ? "is-processing" : ""}`}>
-              {isDisplayableUrl(currentImage) && isDisplayableUrl(project?.sourceImage) && !isProcessing ? (
+            <div
+              ref={renderAreaRef}
+              className={`render-area ${isProcessing ? "is-processing" : ""} ${isPlacingReview ? "cursor-crosshair" : ""}`}
+              onClick={handleCanvasClick}
+            >
+              {isReviewLocked ? (
+                <div className="flex flex-col items-center justify-center w-full h-full text-center p-6 text-zinc-400">
+                  <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center mb-2.5 text-zinc-500 font-semibold text-xs">
+                    Florepy
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-700">
+                    Protected Design Review
+                  </p>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-xs">
+                    Please enter the passcode provided by the builder to unlock
+                    this review.
+                  </p>
+                </div>
+              ) : isAddingComment && isDisplayableUrl(currentImage) ? (
+                /* When adding comments, slider locks completely to 3D View (or Plan View) */
+                <img
+                  src={
+                    reviewLockedView === "plan" &&
+                    isDisplayableUrl(project?.sourceImage)
+                      ? project!.sourceImage!
+                      : currentImage!
+                  }
+                  alt={
+                    reviewLockedView === "plan"
+                      ? "Floor Plan"
+                      : "3D Visualization"
+                  }
+                  className="render-img w-full h-full object-contain"
+                  onLoad={handleImageLoad}
+                />
+              ) : isDisplayableUrl(currentImage) &&
+                isDisplayableUrl(project?.sourceImage) &&
+                !isProcessing ? (
                 <ReactCompareSlider
                   defaultValue={50}
-                  style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    position: "absolute",
+                    inset: 0,
+                  }}
                   itemOne={
                     <ReactCompareSliderImage
                       src={project!.sourceImage!}
                       alt="before"
                       className="render-img w-full h-full"
-                      style={{ objectFit: 'contain' }}
+                      style={{ objectFit: "contain" }}
+                      onLoad={handleImageLoad}
                     />
                   }
                   itemTwo={
@@ -404,12 +1048,18 @@ function VisualizerId() {
                       src={currentImage!}
                       alt="after"
                       className="render-img w-full h-full"
-                      style={{ objectFit: 'contain' }}
+                      style={{ objectFit: "contain" }}
+                      onLoad={handleImageLoad}
                     />
                   }
                 />
               ) : isDisplayableUrl(currentImage) ? (
-                <img src={currentImage!} alt="AI Render" className="render-img" />
+                <img
+                  src={currentImage!}
+                  alt="AI Render"
+                  className="render-img"
+                  onLoad={handleImageLoad}
+                />
               ) : (
                 <div className="render-placeholder flex items-center justify-center w-full h-full absolute inset-0">
                   {isDisplayableUrl(project?.sourceImage) ? (
@@ -417,6 +1067,7 @@ function VisualizerId() {
                       src={project!.sourceImage!}
                       alt="Original"
                       className="render-fallback object-contain w-full h-full max-h-[80vh]"
+                      onLoad={handleImageLoad}
                     />
                   ) : (
                     <div className="w-full h-full bg-zinc-200/50 animate-pulse flex items-center justify-center text-zinc-400 text-sm font-medium">
@@ -426,11 +1077,362 @@ function VisualizerId() {
                 </div>
               )}
 
+              {/* Floating Helper Banner when Placing Pin in Locked View */}
+              {isPlacingReview && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-zinc-950/90 backdrop-blur-md text-white text-xs px-3.5 py-1.5 rounded-full shadow-lg border border-zinc-800"
+                >
+                  <span className="font-medium">
+                    Click on {reviewLockedView === "plan" ? "Plan" : "3D view"}{" "}
+                    to place pin
+                  </span>
+                  <div className="h-3 w-px bg-zinc-700 mx-0.5" />
+                  <div className="flex items-center gap-0.5 bg-zinc-800/90 rounded-full p-0.5 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setReviewLockedView("3d")}
+                      className={`px-2 py-0.5 rounded-full transition-colors cursor-pointer ${
+                        reviewLockedView === "3d"
+                          ? "bg-primary text-white font-semibold"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      3D View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReviewLockedView("plan")}
+                      className={`px-2 py-0.5 rounded-full transition-colors cursor-pointer ${
+                        reviewLockedView === "plan"
+                          ? "bg-primary text-white font-semibold"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      Plan
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Spatial Review Pins Overlay (Geometrically locked to active image bounds) */}
+              {areReviewsVisible && (
+                <div
+                  style={
+                    imageBounds.width > 0
+                      ? {
+                          position: "absolute",
+                          left: `${imageBounds.left}px`,
+                          top: `${imageBounds.top}px`,
+                          width: `${imageBounds.width}px`,
+                          height: `${imageBounds.height}px`,
+                        }
+                      : {
+                          position: "absolute",
+                          inset: 0,
+                        }
+                  }
+                  className="z-30 pointer-events-none"
+                >
+                  {/* Pending Review Placement Marker on the Image */}
+                  {pendingReviewPin && (
+                    <div
+                      style={{
+                        left: `${pendingReviewPin.x}%`,
+                        top: `${pendingReviewPin.y}%`,
+                      }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none z-40"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center animate-bounce shadow-lg ring-2 ring-white">
+                        +
+                      </div>
+                    </div>
+                  )}
+
+                  {Array.isArray(project?.reviews) &&
+                    project.reviews.map((rev, index) => {
+                      const isSelected = activeReviewId === rev.id;
+                      const openDownwards = rev.y < 35;
+                      const alignClass =
+                        rev.x < 25
+                          ? "left-0"
+                          : rev.x > 75
+                            ? "right-0 left-auto"
+                            : "left-1/2 -translate-x-1/2";
+                      const verticalClass = openDownwards
+                        ? "top-8"
+                        : "bottom-8";
+
+                      return (
+                        <div
+                          key={rev.id}
+                          style={{ left: `${rev.x}%`, top: `${rev.y}%` }}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveReviewId(isSelected ? null : rev.id);
+                            }}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shadow-md transition-transform cursor-pointer ${
+                              rev.resolved
+                                ? "bg-emerald-600 text-white"
+                                : isSelected
+                                  ? "bg-primary text-white ring-2 ring-primary/40"
+                                  : "bg-zinc-950 text-white"
+                            }`}
+                            title={`Review ${index + 1} by ${rev.author}: ${rev.text}`}
+                          >
+                            {rev.resolved ? <Check size={11} /> : index + 1}
+                          </button>
+
+                          {/* Review Popover Card */}
+                          {isSelected && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className={`absolute ${alignClass} ${verticalClass} w-max min-w-[140px] max-w-[min(340px,85vw)] bg-white/95 backdrop-blur-md rounded-lg p-2.5 shadow-xl border border-zinc-200 text-left z-40 transition-all text-zinc-900`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[11px] font-semibold text-zinc-900 truncate">
+                                    {rev.author}
+                                  </p>
+                                  <p className="text-[9.5px] text-zinc-400">
+                                    {new Date(
+                                      rev.createdAt,
+                                    ).toLocaleDateString()}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Resolved toggle for owner */}
+                                  {isOwner ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleToggleResolveReview(rev.id)
+                                      }
+                                      title={
+                                        rev.resolved
+                                          ? "Cancel resolved status (unresolve)"
+                                          : "Click to mark resolved"
+                                      }
+                                      className={`p-1 rounded transition-colors cursor-pointer ${
+                                        rev.resolved
+                                          ? "text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100"
+                                          : "text-zinc-400 hover:text-emerald-600 hover:bg-zinc-100"
+                                      }`}
+                                    >
+                                      {rev.resolved ? (
+                                        <X size={13} className="stroke-3" />
+                                      ) : (
+                                        <Check size={13} className="stroke-3" />
+                                      )}
+                                    </button>
+                                  ) : rev.resolved ? (
+                                    <span
+                                      title="Resolved by builder"
+                                      className="p-1 rounded bg-emerald-50 text-emerald-600 flex items-center"
+                                    >
+                                      <Check
+                                        size={12}
+                                        className="stroke-[2.5]"
+                                      />
+                                    </span>
+                                  ) : null}
+
+                                  {/* Edit comment (client author only, never owner) */}
+                                  {canEditReview(rev) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingReviewId(rev.id);
+                                        setEditingReviewText(rev.text);
+                                      }}
+                                      title="Edit comment"
+                                      className="p-1 rounded text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 transition-colors cursor-pointer"
+                                    >
+                                      <Pencil size={12} />
+                                    </button>
+                                  )}
+
+                                  {/* Delete trash icon: only when resolved for owner, or if author */}
+                                  {canDeleteReview(rev) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteReview(rev.id)}
+                                      title="Delete comment"
+                                      className="p-1 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {editingReviewId === rev.id ? (
+                                <div className="pt-1 space-y-1.5 min-w-[200px]">
+                                  <textarea
+                                    rows={2}
+                                    value={editingReviewText}
+                                    onChange={(e) =>
+                                      setEditingReviewText(e.target.value)
+                                    }
+                                    autoFocus
+                                    className="w-full text-[11px] bg-zinc-50 border border-zinc-300 focus:border-zinc-950 rounded-md p-1.5 outline-none text-zinc-900 resize-none"
+                                  />
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingReviewId(null);
+                                        setEditingReviewText("");
+                                      }}
+                                      className="px-2 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-800 cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        isSavingEdit ||
+                                        !editingReviewText.trim()
+                                      }
+                                      onClick={() => handleEditReview(rev.id)}
+                                      className="px-2.5 py-0.5 text-[10px] font-semibold text-white bg-zinc-950 hover:bg-black rounded-md transition-colors cursor-pointer disabled:opacity-40"
+                                    >
+                                      {isSavingEdit ? "Saving..." : "Save"}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="max-h-48 overflow-y-auto pr-0.5">
+                                  <p className="text-[11px] text-zinc-700 pt-1.5 leading-relaxed break-words whitespace-pre-wrap">
+                                    {rev.text}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
+              {/* Pending Review Placement Modal */}
+              {pendingReviewPin && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute z-40 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-80 max-w-[calc(100vw-32px)] bg-white rounded-xl shadow-2xl border border-zinc-200 p-3.5 space-y-2.5 text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
+                      New Review Pin
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingReviewPin(null)}
+                      className="text-zinc-400 hover:text-zinc-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-700 mb-1">
+                      Your Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Sarah, Architect"
+                      value={isSignedIn && userName ? userName : reviewerName}
+                      readOnly={Boolean(isSignedIn && userName)}
+                      onChange={(e) => setReviewerName(e.target.value)}
+                      className={`w-full text-xs rounded-md px-2.5 py-1.5 outline-none ${
+                        isSignedIn && userName
+                          ? "bg-zinc-100 text-zinc-600 border border-zinc-200 cursor-not-allowed"
+                          : "bg-zinc-50 border border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 text-zinc-900"
+                      }`}
+                      required
+                    />
+                    {isSignedIn && userName ? (
+                      <p className="text-[10px] text-zinc-400 mt-1">
+                        Using your account name ({userName})
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-zinc-400 mt-1">
+                        Remembered on this device for your reviews
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-700 mb-1">
+                      Feedback / Note <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Describe your review (e.g. change living room flooring to oak)..."
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                          e.preventDefault();
+                          const author = (
+                            isSignedIn && userName ? userName : reviewerName
+                          ).trim();
+                          if (
+                            reviewText.trim() &&
+                            author &&
+                            !isSubmittingReview
+                          ) {
+                            void handleAddReview();
+                          }
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          setPendingReviewPin(null);
+                        }
+                      }}
+                      autoFocus
+                      className="w-full text-xs bg-zinc-50 border border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 rounded-md p-2 outline-none text-zinc-900 resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setPendingReviewPin(null)}
+                      className="px-2.5 py-1.5 text-xs text-zinc-500 hover:text-zinc-800 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        isSubmittingReview ||
+                        !reviewText.trim() ||
+                        !(
+                          isSignedIn && userName ? userName : reviewerName
+                        ).trim()
+                      }
+                      onClick={handleAddReview}
+                      className="px-3.5 py-1.5 text-xs font-semibold text-white bg-zinc-950 hover:bg-black rounded-md transition-colors cursor-pointer disabled:opacity-40"
+                    >
+                      {isSubmittingReview ? "Posting..." : "Post Review"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {isProcessing && (
                 <div className="render-overlay absolute inset-0 z-20 flex items-center justify-center bg-zinc-100/80 backdrop-blur-sm">
                   <div className="rendering-card bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm flex flex-col items-center max-w-[85vw] sm:max-w-none">
                     <RefreshCcw className="spinner animate-spin text-primary w-6 h-6 sm:w-8 sm:h-8 mb-2.5 sm:mb-4" />
-                    <span className="title font-bold text-base sm:text-lg mb-0.5 sm:mb-1">Rendering...</span>
+                    <span className="title font-bold text-base sm:text-lg mb-0.5 sm:mb-1">
+                      Rendering...
+                    </span>
                     <span className="subtitle text-xs sm:text-sm text-zinc-500 text-center">
                       Generating your 3D visualization...
                     </span>
@@ -448,87 +1450,273 @@ function VisualizerId() {
         onClose={() => setShowShareModal(false)}
         title="Share Project"
         disabled={isSharing}
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          {/* Dual-Tab Navigation */}
+          <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShareTab("review")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                shareTab === "review"
+                  ? "bg-white text-zinc-950 shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-950"
+              }`}
+            >
+              <MessageSquare size={13} />
+              <span>Client Review</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareTab("public")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                shareTab === "public"
+                  ? "bg-white text-zinc-950 shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-950"
+              }`}
+            >
+              <Globe size={13} />
+              <span>Public Showcase</span>
+            </button>
+          </div>
+
+          {/* TAB 1: CLIENT REVIEW */}
+          {shareTab === "review" && (
+            <div className="space-y-3.5 pt-1">
+              <p className="text-xs text-zinc-500 leading-normal">
+                Share this private link with clients to collect pin reviews.
+                Hidden from the public feed.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-700 mb-1.5">
+                  Client Review Link
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={getClientReviewUrl()}
+                    className="w-full text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-2 text-zinc-700 select-all outline-none truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={copyClientReviewLink}
+                    className="shrink-0 px-3 py-2 text-xs font-medium rounded-md bg-zinc-950 text-white hover:bg-black transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    {copiedReview ? (
+                      <>
+                        <Check size={12} className="text-emerald-400" /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} /> Copy Link
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Optional Passcode Settings */}
+              <div className="pt-2 border-t border-zinc-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="passcode-toggle"
+                    className="text-xs font-medium text-zinc-800 cursor-pointer"
+                  >
+                    Protect with Review Passcode
+                  </label>
+                  <input
+                    id="passcode-toggle"
+                    type="checkbox"
+                    checked={enablePasscode}
+                    disabled={isSavingPasscode}
+                    onChange={(e) =>
+                      void handleTogglePasscode(e.target.checked)
+                    }
+                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
+                  />
+                </div>
+
+                {enablePasscode && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={12}
+                        placeholder="Enter passcode (e.g. 4821)"
+                        value={passcodeInput}
+                        onChange={(e) => setPasscodeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleSavePasscode();
+                          }
+                        }}
+                        autoFocus
+                        className="w-full text-xs bg-white border border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 rounded-md px-2.5 py-1.5 text-zinc-900 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSavePasscode}
+                        disabled={isSavingPasscode || !passcodeInput.trim()}
+                        className="shrink-0 text-xs font-medium text-white bg-zinc-950 hover:bg-black px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        {isSavingPasscode ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          "Save"
+                        )}
+                      </button>
+                    </div>
+
+                    {passcodeToast && (
+                      <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 transition-all duration-200">
+                        <Check size={12} /> {passcodeToast}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: PUBLIC SHOWCASE */}
+          {shareTab === "public" && (
+            <div className="space-y-3 pt-1">
+              {project?.isPublic ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-zinc-500 leading-normal">
+                    This project is live in the Community Feed. Client reviews
+                    are kept hidden from public showcase visitors.
+                  </p>
+
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${typeof window !== "undefined" ? window.location.origin : ""}/visualizer/${id}`}
+                      className="w-full text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-2 text-zinc-700 select-all outline-none truncate"
+                    />
+                    <button
+                      type="button"
+                      onClick={copyShareLink}
+                      className="shrink-0 px-3 py-2 text-xs font-medium rounded-md bg-zinc-950 text-white hover:bg-black transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      {copied ? (
+                        <>
+                          <Check size={12} className="text-emerald-400" />{" "}
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} /> Copy Link
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-400">
+                    <span className="flex items-center gap-1.5 text-zinc-500 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Public Showcase Live
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleMakePrivate}
+                      disabled={isSharing}
+                      className="hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Make Private
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-zinc-50 border border-zinc-200/80 rounded-lg p-2.5 flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-zinc-200/70 text-zinc-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Lock size={13} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-zinc-900">
+                        Not in Community Showcase
+                      </h4>
+                      <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                        Publishing adds this 3D render to the Florepy Community
+                        Feed. Internal reviews will not be shown.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end items-center pt-1">
+                    <button
+                      type="button"
+                      onClick={handleConfirmShare}
+                      disabled={isSharing}
+                      className="text-xs font-medium text-white bg-zinc-950 hover:bg-black px-3.5 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {isSharing ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />{" "}
+                          Publishing...
+                        </>
+                      ) : (
+                        <>
+                          <Globe size={12} /> Publish to Showcase
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Review Passcode Lock Modal for Client */}
+      <Modal
+        isOpen={isReviewLocked}
+        onClose={() => {}}
+        title="Protected Review"
+        showCloseButton={false}
         maxWidth="sm"
       >
-        {project?.isPublic ? (
-          <div className="space-y-3">
-            <p className="text-xs text-zinc-500 leading-normal">
-              Anyone with this link can view the visualization.
-            </p>
+        <form onSubmit={handleUnlockPasscode} className="space-y-3 pt-1">
+          <p className="text-zinc-600 text-xs">
+            This design review is password-protected by the builder.
+          </p>
 
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                readOnly
-                value={typeof window !== "undefined" ? window.location.href : ""}
-                className="w-full text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-md px-2.5 py-1.5 text-zinc-700 select-all outline-none truncate"
-              />
-              <button
-                type="button"
-                onClick={copyShareLink}
-                className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-900 text-white hover:bg-black transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                {copied ? (
-                  <>
-                    <Check size={12} className="text-emerald-400" /> Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy size={12} /> Copy
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-400">
-              <span className="flex items-center gap-1.5 text-zinc-500 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Public to anyone
-              </span>
-              <button
-                type="button"
-                onClick={handleMakePrivate}
-                disabled={isSharing}
-                className="hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Make Private
-              </button>
-            </div>
+          <div>
+            <input
+              type="password"
+              placeholder="Enter review passcode"
+              value={enteredPasscode}
+              onChange={(e) => {
+                setEnteredPasscode(e.target.value);
+                setPasscodeError(false);
+              }}
+              autoFocus
+              className="w-full text-xs bg-white border border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 rounded-md px-3 py-2 text-zinc-900 outline-none"
+            />
+            {passcodeError && (
+              <p className="text-[11px] text-red-600 font-medium mt-1">
+                Incorrect passcode. Please try again.
+              </p>
+            )}
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="bg-zinc-50 border border-zinc-200/80 rounded-lg p-2.5 flex items-start gap-2.5">
-              <div className="w-7 h-7 rounded-md bg-zinc-200/70 text-zinc-600 flex items-center justify-center shrink-0 mt-0.5">
-                <Lock size={13} />
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-zinc-900">Private Project</h4>
-                <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
-                  Only you can view this visualization. Publish it to generate a public share link.
-                </p>
-              </div>
-            </div>
 
-            <div className="flex justify-end items-center pt-1">
-              <button
-                type="button"
-                onClick={handleConfirmShare}
-                disabled={isSharing}
-                className="text-xs font-medium text-white bg-zinc-900 hover:bg-black px-3 py-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-              >
-                {isSharing ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" /> Publishing...
-                  </>
-                ) : (
-                  <>
-                    <Globe size={12} /> Publish &amp; Copy
-                  </>
-                )}
-              </button>
-            </div>
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              disabled={!enteredPasscode.trim()}
+              className="text-xs font-medium text-white bg-zinc-950 hover:bg-black px-4 py-2 rounded-md transition-colors cursor-pointer disabled:opacity-40"
+            >
+              Unlock Review
+            </button>
           </div>
-        )}
+        </form>
       </Modal>
     </div>
   );

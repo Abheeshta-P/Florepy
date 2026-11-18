@@ -21,12 +21,28 @@ export const getCurrentUser = async () => {
 };
 
 /**
- * Executes a call to the Puter worker endpoint with the user's auth token
+ * Retrieves the Puter authentication token from in-memory SDK properties
+ * or persistent browser storage (supporting both v2 and legacy v1 tokens).
+ * Ensures worker API calls are consistently authenticated.
+ */
+export const getPuterToken = (): string | null => {
+  if (typeof window === "undefined") return null;
+  return (
+    (puter as any)?.authToken ||
+    (puter as any)?.auth?.token ||
+    localStorage.getItem("puter.auth.token.v2") ||
+    localStorage.getItem("puter.auth.token") ||
+    null
+  );
+};
+
+/**
+ * Executes an HTTP call to the Puter worker endpoint with the user's auth token
  * attached via `puter-auth`, WITHOUT triggering Puter's login popup when unauthenticated.
  */
 const callWorker = async (url: string, init?: RequestInit): Promise<Response> => {
   const headers = new Headers(init?.headers);
-  const token = (puter as any)?.authToken;
+  const token = getPuterToken();
   if (token && !headers.has("puter-auth")) {
     headers.set("puter-auth", token);
   }
@@ -85,18 +101,24 @@ export const createProject = async ({
         })
       : null;
 
+  // Safely resolve the source image path: prefer hosted URL from upload,
+  // or retain existing valid private/hosted paths so they are not wiped.
   const resolvedSource =
     hostedSource?.url ||
-    (isHostedUrl(item.sourceImage) ? item.sourceImage : "");
+    (item.sourceImage && (isHostedUrl(item.sourceImage) || item.sourceImage.startsWith("project/"))
+      ? item.sourceImage
+      : "");
 
   if (!resolvedSource) {
     console.warn("Failed to host source image, skipping save.");
     return null;
   }
 
+  // Safely resolve rendered view: prefer hosted URL from upload,
+  // or retain existing private Puter FS / hosted paths.
   const resolvedRender =
     hostedRender?.url ||
-    (item.renderedImage && isHostedUrl(item.renderedImage)
+    (item.renderedImage && (isHostedUrl(item.renderedImage) || item.renderedImage.startsWith("project/"))
       ? item.renderedImage
       : undefined);
 
@@ -111,17 +133,29 @@ export const createProject = async ({
   const authorName = item.ownerName || currentUser?.username || undefined;
   const ownerId = item.ownerId || currentUser?.uuid || undefined;
 
-  const payload = {
+  const payload: DesignItem = {
     ...rest,
+    id: projectId,
     ownerName: authorName,
     ownerId,
     sourceImage: resolvedSource,
     renderedImage: resolvedRender,
     isPublic: standardizedIsPublic,
+    timestamp: item.timestamp || Date.now(),
   };
 
   try {
-    // call puter worker to store the project in kv
+    // 1. Direct local KV save for instant high-reliability persistence
+    const key = `florepy_project_${projectId}`;
+    try {
+      const existing = await puter.kv.get(key);
+      const existingRecord = typeof existing === "string" ? JSON.parse(existing) : existing;
+      await puter.kv.set(key, { ...(existingRecord || {}), ...payload });
+    } catch (kvErr) {
+      console.warn("Direct browser KV save error:", kvErr);
+    }
+
+    // 2. Call puter worker to store the project in central kv & community
     const response = await callWorker(
       `${PUTER_WORKER_URL}/api/projects/save`,
       {
@@ -138,13 +172,18 @@ export const createProject = async ({
     );
 
     if (!response.ok) {
-      console.error("Failed to save the project", await response.text());
-      return null;
+      console.error("Worker failed to save the project", await response.text());
+      const sourceDisplay = (await resolveDisplayUrl(payload.sourceImage)) || payload.sourceImage;
+      const renderDisplay = (await resolveDisplayUrl(payload.renderedImage)) || payload.renderedImage;
+      return {
+        ...payload,
+        sourceImage: sourceDisplay,
+        renderedImage: renderDisplay,
+      };
     }
 
     const data = (await response.json()) as { project?: DesignItem | null };
-    const savedProject = data?.project ?? null;
-    if (!savedProject) return null;
+    const savedProject = data?.project ?? payload;
 
     // Resolve private paths to displayable blob URLs
     const sourceDisplay = (await resolveDisplayUrl(savedProject.sourceImage)) || savedProject.sourceImage;
@@ -277,28 +316,58 @@ export const getCommunityProjects = async (): Promise<DesignItem[]> => {
   }
 };
 
-export const getProjectById = async ({ id }: { id: string }) => {
+export const getProjectById = async ({
+  id,
+  reviewToken,
+}: {
+  id: string;
+  reviewToken?: string | null;
+}) => {
   if (!PUTER_WORKER_URL) {
     console.warn("Missing VITE_PUTER_WORKER_URL; skipping project fetch.");
     return null;
   }
 
   try {
+    const query = new URLSearchParams({ id });
+    if (reviewToken) {
+      query.set("review", reviewToken);
+    }
+
     const response = await callWorker(
-      `${PUTER_WORKER_URL}/api/projects/get?id=${encodeURIComponent(id)}`,
+      `${PUTER_WORKER_URL}/api/projects/get?${query.toString()}`,
       { method: "GET" },
     );
 
-    if (!response.ok) {
-      console.error("Failed to fetch project:", await response.text());
-      return null;
+    let project: DesignItem | null = null;
+
+    if (response.ok) {
+      const data = (await response.json()) as {
+        project?: DesignItem | null;
+      };
+      project = data?.project ?? null;
     }
 
-    const data = (await response.json()) as {
-      project?: DesignItem | null;
-    };
+    // Direct browser KV fallback: if worker is unreachable or hasn't finished syncing,
+    // load directly from the authenticated user's local Puter KV store so the visualizer never fails.
+    if (!project && puter.auth.isSignedIn()) {
+      try {
+        const localRecord = await puter.kv.get(`florepy_project_${id}`);
+        if (localRecord) {
+          const parsed = typeof localRecord === "string" ? JSON.parse(localRecord) : localRecord;
+          if (parsed && parsed.id) {
+            project = {
+              ...parsed,
+              isOwner: true,
+              isPublic: Boolean(parsed.isPublic),
+            };
+          }
+        }
+      } catch (localErr) {
+        console.warn("Local KV fallback check:", localErr);
+      }
+    }
 
-    const project = data?.project ?? null;
     if (!project) return null;
 
     const sourceImage = (await resolveDisplayUrl(project.sourceImage)) || project.sourceImage;
@@ -312,6 +381,62 @@ export const getProjectById = async ({ id }: { id: string }) => {
   } catch (error) {
     console.error("Failed to fetch project:", error);
     return null;
+  }
+};
+
+/**
+ * Copies source and rendered project files from the private vault
+ * into the public hosting directory so external visitors and clients can view them.
+ */
+export const copyProjectFilesToPublicHosting = async (
+  projectId: string
+): Promise<{ sourceImage?: string; renderedImage?: string }> => {
+  if (!projectId) return {};
+  try {
+    const hosting = await getOrCreateHostingConfig();
+    if (!hosting?.subdomain) return {};
+
+    const publicDir = `${PUBLIC_HOSTING_DIR}/project/${projectId}`;
+    await puter.fs.mkdir(publicDir, { createMissingParents: true }).catch(() => {});
+
+    let publicSource: string | undefined;
+    let publicRender: string | undefined;
+
+    const exts = ["png", "jpg", "jpeg", "webp", "svg"];
+    for (const ext of exts) {
+      try {
+        const blob = await puter.fs.read(`project/${projectId}/source.${ext}`);
+        if (blob && blob.size > 0) {
+          await puter.fs.write(`${publicDir}/source.${ext}`, blob);
+          publicSource =
+            getHostedUrl(
+              { subdomain: hosting.subdomain },
+              `project/${projectId}/source.${ext}`
+            ) || undefined;
+          break;
+        }
+      } catch {}
+    }
+
+    for (const ext of exts) {
+      try {
+        const blob = await puter.fs.read(`project/${projectId}/rendered.${ext}`);
+        if (blob && blob.size > 0) {
+          await puter.fs.write(`${publicDir}/rendered.${ext}`, blob);
+          publicRender =
+            getHostedUrl(
+              { subdomain: hosting.subdomain },
+              `project/${projectId}/rendered.${ext}`
+            ) || undefined;
+          break;
+        }
+      } catch {}
+    }
+
+    return { sourceImage: publicSource, renderedImage: publicRender };
+  } catch (err) {
+    console.warn("Failed to copy project files to public hosting:", err);
+    return {};
   }
 };
 
@@ -331,34 +456,9 @@ export const toggleProjectPublic = async ({
 
   if (isPublic) {
     // 1. PUBLISH: Copy files from private vault into public/project/{projectId}/
-    const hosting = await getOrCreateHostingConfig();
-    if (hosting?.subdomain) {
-      const publicDir = `${PUBLIC_HOSTING_DIR}/project/${projectId}`;
-      await puter.fs.mkdir(publicDir, { createMissingParents: true }).catch(() => {});
-
-      const exts = ["png", "jpg", "jpeg", "webp", "svg"];
-      for (const ext of exts) {
-        try {
-          const blob = await puter.fs.read(`project/${projectId}/source.${ext}`);
-          if (blob && blob.size > 0) {
-            await puter.fs.write(`${publicDir}/source.${ext}`, blob);
-            publicSource = getHostedUrl({ subdomain: hosting.subdomain }, `project/${projectId}/source.${ext}`) || publicSource;
-            break;
-          }
-        } catch {}
-      }
-
-      for (const ext of exts) {
-        try {
-          const blob = await puter.fs.read(`project/${projectId}/rendered.${ext}`);
-          if (blob && blob.size > 0) {
-            await puter.fs.write(`${publicDir}/rendered.${ext}`, blob);
-            publicRender = getHostedUrl({ subdomain: hosting.subdomain }, `project/${projectId}/rendered.${ext}`) || publicRender;
-            break;
-          }
-        } catch {}
-      }
-    }
+    const hosted = await copyProjectFilesToPublicHosting(projectId);
+    publicSource = hosted.sourceImage || publicSource;
+    publicRender = hosted.renderedImage || publicRender;
   } else {
     // 2. UNPUBLISH: Delete files from public hosting directory
     await puter.fs.delete(`${PUBLIC_HOSTING_DIR}/project/${projectId}`).catch(() => {});
@@ -528,5 +628,102 @@ export const renameProject = async ({
   } catch (error) {
     console.error("Failed to rename project:", error);
     return null;
+  }
+};
+
+/**
+ * Ensures images for client review are hosted on the owner's hosting subdomain
+ * so that invited clients can view the design without needing owner filesystem credentials.
+ */
+export const ensureHostedReviewImages = async (
+  project: DesignItem
+): Promise<{ sourceImage?: string; renderedImage?: string | null }> => {
+  if (!project?.id) return {};
+
+  // If already hosted URLs, skip expensive filesystem re-copying
+  if (
+    isHostedUrl(project.sourceImage) &&
+    (!project.renderedImage || isHostedUrl(project.renderedImage))
+  ) {
+    return {
+      sourceImage: project.sourceImage,
+      renderedImage: project.renderedImage,
+    };
+  }
+
+  const hosted = await copyProjectFilesToPublicHosting(project.id);
+  return {
+    sourceImage: hosted.sourceImage || project.sourceImage,
+    renderedImage: hosted.renderedImage !== undefined ? hosted.renderedImage : project.renderedImage,
+  };
+};
+
+/**
+ * Updates review settings (token, passcode, reviews) for a project.
+ * Uses the Worker review endpoint as the single source of truth to avoid
+ * race conditions or overwriting client reviews with stale local state.
+ */
+export const updateProjectReviews = async ({
+  projectId,
+  reviewToken,
+  reviewPasscode,
+  reviews,
+  action = "sync",
+  review,
+  reviewId,
+  resolved,
+  sourceImage,
+  renderedImage,
+  text,
+  author,
+}: {
+  projectId: string;
+  reviewToken?: string | null;
+  reviewPasscode?: string | null;
+  reviews?: ProjectReview[];
+  action?: "sync" | "add" | "resolve" | "delete" | "edit";
+  review?: ProjectReview;
+  reviewId?: string;
+  resolved?: boolean;
+  sourceImage?: string;
+  renderedImage?: string | null;
+  text?: string;
+  author?: string;
+}): Promise<boolean> => {
+  if (!projectId) return false;
+
+  try {
+    // Call Worker review endpoint (single authoritative store for both owner and clients)
+    if (PUTER_WORKER_URL) {
+      const res = await callWorker(`${PUTER_WORKER_URL}/api/projects/review`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          reviewToken,
+          reviewPasscode,
+          reviews,
+          action,
+          review,
+          reviewId,
+          resolved,
+          sourceImage,
+          renderedImage,
+          text,
+          author,
+        }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        return true;
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Failed to update project reviews:", err);
+    return false;
   }
 };

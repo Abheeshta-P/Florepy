@@ -13,6 +13,16 @@ interface Material {
   category: "floor" | "wall" | "furniture";
 }
 
+interface ProjectReview {
+  id: string;
+  x: number; // percentage (0-100)
+  y: number; // percentage (0-100)
+  author: string;
+  text: string;
+  createdAt: number;
+  resolved?: boolean;
+}
+
 interface DesignItem {
   id: string;
   name?: string | null;
@@ -27,6 +37,9 @@ interface DesignItem {
   sharedAt?: string | null;
   isPublic?: boolean;
   isOwner?: boolean;
+  reviewToken?: string | null;
+  reviewPasscode?: string | null;
+  reviews?: ProjectReview[];
 }
 
 interface DesignConfig {

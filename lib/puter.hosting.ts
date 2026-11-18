@@ -82,8 +82,13 @@ export const uploadImageToHosting = async ({
   try {
     let resolved: { blob: Blob; contentType: string } | null = null;
 
-    // If url is a Puter FS path (e.g. project/123/source.png), read directly from Puter FS
+    // 1. If the URL is already an internal Puter FS vault path (e.g. project/{id}/source.png)
+    // and the project is private, return immediately to prevent redundant disk I/O and overwrite risks.
     if (url.startsWith("project/") || !isDisplayableUrl(url)) {
+      if (!isPublic) {
+        return { url };
+      }
+      // If publishing, read the private master copy so it can be copied into public hosting
       try {
         const fsBlob = await puter.fs.read(url);
         if (fsBlob && fsBlob.size > 0) {
@@ -95,19 +100,23 @@ export const uploadImageToHosting = async ({
       }
     }
 
+    // 2. Decode data URLs (e.g. base64 AI render output) or fetch local blob URLs
+    // directly into a binary Blob in memory without DOM or canvas overhead.
     if (!resolved) {
-      resolved =
-        label === "rendered"
-          ? await imageUrlToPngBlob(url).then((blob) =>
-              blob ? { blob, contentType: "image/png" } : null,
-            )
-          : await fetchBlobFromUrl(url);
+      resolved = await fetchBlobFromUrl(url);
+    }
+
+    // 3. Fallback to canvas rasterization only if direct blob resolution failed
+    if (!resolved && typeof window !== "undefined") {
+      resolved = await imageUrlToPngBlob(url).then((blob) =>
+        blob ? { blob, contentType: "image/png" } : null,
+      );
     }
 
     if (!resolved) return null;
 
-    const contentType = resolved.contentType || resolved.blob.type || "";
-    const ext = getImageExtension(contentType, url);
+    const contentType = resolved.contentType || resolved.blob.type || "image/png";
+    const ext = getImageExtension(contentType, url) || "png";
 
     // 1. Always save the primary master copy in private vault: project/{projectId}/{label}.{ext}
     const privateDir = `project/${projectId}`;
