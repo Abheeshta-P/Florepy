@@ -449,7 +449,7 @@ export default function Dashboard() {
                         </div>
                       )}
                       <div className="meta flex items-center gap-2">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Clock size={12} />
                           <span>
                             {new Date(timestamp).toLocaleDateString()}
@@ -461,7 +461,7 @@ export default function Dashboard() {
                             <Pill
                               dotColor="primary"
                               pulse
-                              className="!px-1.5 !py-0.5 !gap-1"
+                              className="!px-1.5 !py-0.5 !gap-1 shrink-0"
                             >
                               {
                                 project.reviews.filter((r) => !r.resolved)

@@ -223,19 +223,21 @@ export default function Home() {
                           />
                         </div>
                         <div className="card-body">
-                          <div>
-                            <h3>{name}</h3>
-                            <div className="meta">
-                              <Clock size={12} />
-                              <span>
-                                {new Date(timestamp).toLocaleDateString()}
-                              </span>
-                              <span>
+                          <div className="min-w-0 flex-1 mr-2">
+                            <h3 className="truncate">{name}</h3>
+                            <div className="meta flex items-center gap-2">
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Clock size={12} />
+                                <span>
+                                  {new Date(timestamp).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <span className="truncate">
                                 {ownerName ? `By ${ownerName}` : "By Community Member"}
                               </span>
                             </div>
                           </div>
-                          <div className="arrow">
+                          <div className="arrow shrink-0">
                             <ArrowRight size={20} />
                           </div>
                         </div>
