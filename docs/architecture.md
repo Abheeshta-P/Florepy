@@ -207,3 +207,75 @@ Review mutations are processed through explicit action strings:
 - sync: Allowed strictly for project owner. Syncs reviewToken, reviewPasscode, or asset paths.
 
 Once modified, the worker saves the updated review record to me.puter.kv under florepy_review_${projectId}. If the caller is the authenticated owner, it simultaneously mirrors the changes to the owner personal KV store under florepy_project_${projectId}.
+
+## 8. Versioning Engine and Revision Lifecycle (Step 2)
+
+### Iteration Workflow
+The versioning system supports iterative architectural refinement between the builder and the client:
+1. Builder creates initial project (Version 1) with floor plan and 3D visualization.
+2. Client inspects Version 1 via the private review link and drops review pins.
+3. Builder inspects comments on Version 1, modifies the architectural layout, and uploads an updated floor plan as a new revision (Version 2).
+4. Version 2 is initialized with a fresh, empty review thread (`reviews: []`).
+5. Client opens the review link to see Version 2, verifies the revision, and leaves new comments.
+6. Earlier versions and their corresponding comments remain preserved in history.
+
+### Version-Scoped Storage Structure
+Each project maintains an array of `ProjectVersion` objects:
+
+```typescript
+interface ProjectVersion {
+  id: string; // e.g. "ver_1720020000_a1b2"
+  versionNumber: number; // 1, 2, 3...
+  name?: string; // Optional custom label e.g. "Updated Open Kitchen"
+  sourceImage: string; // Puter FS path or hosted URL
+  renderedImage?: string | null;
+  timestamp: number; // Unix epoch ms
+  createdAt: string; // ISO date string
+  reviews?: ProjectReview[]; // Review pins scoped specifically to this revision
+}
+```
+
+### Version Capping and Till-Date Retention Pruning
+To prevent unbounded storage usage in Puter FS and KV, the system applies automated pruning on every revision save and project fetch:
+- Default Max Versions Cap: 5 versions per project.
+- Default Retention Period: 30 days.
+- Pruning Rules:
+  1. Active Version Protection: The currently active version (`activeVersionId`) is always protected and never pruned.
+  2. Fallback Protection: At least one version is always retained.
+  3. Expiration Pruning: Versions older than `now - (retentionDays * 86400000)` are expired, except the active version.
+  4. Cap Overflow Pruning: If surviving versions exceed `maxVersions`, the oldest non-active versions are pruned first.
+
+```javascript
+function pruneVersions(versions, activeVersionId, maxVersions = 5, retentionDays = 30) {
+  if (!Array.isArray(versions) || versions.length === 0) return [];
+  const now = Date.now();
+  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
+  const sorted = [...versions].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  const withinRetention = sorted.filter((v, idx) => {
+    if (v.id === activeVersionId || idx === 0) return true;
+    return now - (v.timestamp || 0) <= maxAgeMs;
+  });
+
+  if (withinRetention.length <= maxVersions) return withinRetention;
+
+  const active = withinRetention.find((v) => v.id === activeVersionId) || withinRetention[0];
+  const others = withinRetention.filter((v) => v.id !== active.id);
+  const cappedOthers = others.slice(0, maxVersions - 1);
+
+  return [active, ...cappedOthers].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+```
+
+### Role-Based Visibility Matrix
+
+| Persona | Access Type | Version History Visibility | Actions Allowed |
+| :--- | :--- | :--- | :--- |
+| Builder (Owner) | Master Account | Full access to all versions | Create new revision, switch active version, download 3D and 2D assets, toggle client visibility. |
+| Client (Review Mode) | `?review=TOKEN` | Conditional (`clientCanViewVersions`) | If toggle is enabled by builder: browse past versions, view historical comments, switch versions. If disabled: sees only the active version. |
+| Community User | Public Feed | None (latest version only) | Views only current 3D render and floor plan. Versions array and reviews are completely stripped. |
+
+### Version Asset Downloads
+Both the Builder and authorized Clients can download version assets directly from the visualizer:
+- Download 3D Render: Exports the high-resolution 3D visualization for the active/selected version (`florepy-[name]-v[N]-3D.png`).
+- Download Floor Plan: Exports the original 2D architectural drawing (`florepy-[name]-v[N]-floorplan.[ext]`).

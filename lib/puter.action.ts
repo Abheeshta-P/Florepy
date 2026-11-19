@@ -676,6 +676,7 @@ export const updateProjectReviews = async ({
   renderedImage,
   text,
   author,
+  versionId,
 }: {
   projectId: string;
   reviewToken?: string | null;
@@ -689,6 +690,7 @@ export const updateProjectReviews = async ({
   renderedImage?: string | null;
   text?: string;
   author?: string;
+  versionId?: string;
 }): Promise<boolean> => {
   if (!projectId) return false;
 
@@ -713,6 +715,7 @@ export const updateProjectReviews = async ({
           renderedImage,
           text,
           author,
+          versionId,
         }),
       }).catch(() => null);
 
@@ -724,6 +727,191 @@ export const updateProjectReviews = async ({
     return true;
   } catch (err) {
     console.error("Failed to update project reviews:", err);
+    return false;
+  }
+};
+
+/**
+ * Creates a new iteration/revision for a project.
+ * Automatically saves the floor plan and optional 3D render, creates a new version entry
+ * with a clean review slate (0 initial comments), and updates the active version.
+ */
+export const createProjectRevision = async ({
+  projectId,
+  sourceImage,
+  renderedImage,
+  name,
+  isPublic = false,
+}: {
+  projectId: string;
+  sourceImage: string;
+  renderedImage?: string | null;
+  name?: string;
+  isPublic?: boolean;
+}): Promise<{
+  success: boolean;
+  activeVersionId?: string;
+  versions?: ProjectVersion[];
+  currentVersion?: ProjectVersion;
+} | null> => {
+  if (!PUTER_WORKER_URL || !projectId || !sourceImage) return null;
+
+  try {
+    const hosting = isPublic ? await getOrCreateHostingConfig() : null;
+    const versionTimestamp = Date.now();
+
+    // Store version assets in Puter FS / public hosting
+    const hostedSource = await uploadImageToHosting({
+      hosting,
+      url: sourceImage,
+      projectId,
+      label: `source_rev_${versionTimestamp}`,
+      isPublic,
+    });
+
+    const hostedRender = renderedImage
+      ? await uploadImageToHosting({
+          hosting,
+          url: renderedImage,
+          projectId,
+          label: `render_rev_${versionTimestamp}`,
+          isPublic,
+        })
+      : null;
+
+    const resolvedSource = hostedSource?.url || sourceImage;
+    const resolvedRender = hostedRender?.url || renderedImage || null;
+
+    const res = await callWorker(`${PUTER_WORKER_URL}/api/projects/version`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        action: "create",
+        sourceImage: resolvedSource,
+        renderedImage: resolvedRender,
+        name,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to create version on worker:", await res.text());
+      return null;
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("Error creating project revision:", err);
+    return null;
+  }
+};
+
+/**
+ * Switches the active version of a project.
+ * Works for owner and optionally for client (if clientCanViewVersions is enabled).
+ */
+export const switchProjectVersion = async ({
+  projectId,
+  versionId,
+  reviewToken,
+}: {
+  projectId: string;
+  versionId: string;
+  reviewToken?: string | null;
+}): Promise<{
+  success: boolean;
+  activeVersionId?: string;
+  versions?: ProjectVersion[];
+  currentVersion?: ProjectVersion;
+} | null> => {
+  if (!PUTER_WORKER_URL || !projectId || !versionId) return null;
+
+  try {
+    const res = await callWorker(`${PUTER_WORKER_URL}/api/projects/version`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        action: "switch",
+        versionId,
+        reviewToken,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to switch version on worker:", await res.text());
+      return null;
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("Error switching project version:", err);
+    return null;
+  }
+};
+
+/**
+ * Updates versioning settings for a project (client visibility, max cap, retention days).
+ */
+export const updateProjectVersionSettings = async ({
+  projectId,
+  clientCanViewVersions,
+  maxVersions,
+  retentionDays,
+}: {
+  projectId: string;
+  clientCanViewVersions?: boolean;
+  maxVersions?: number;
+  retentionDays?: number;
+}): Promise<boolean> => {
+  if (!PUTER_WORKER_URL || !projectId) return false;
+
+  try {
+    const res = await callWorker(`${PUTER_WORKER_URL}/api/projects/version`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        action: "settings",
+        clientCanViewVersions,
+        maxVersions,
+        retentionDays,
+      }),
+    });
+
+    return res.ok;
+  } catch (err) {
+    console.error("Error updating version settings:", err);
+    return false;
+  }
+};
+
+/**
+ * Deletes an old version of a project (owner only).
+ */
+export const deleteProjectVersion = async ({
+  projectId,
+  versionId,
+}: {
+  projectId: string;
+  versionId: string;
+}): Promise<boolean> => {
+  if (!PUTER_WORKER_URL || !projectId || !versionId) return false;
+
+  try {
+    const res = await callWorker(`${PUTER_WORKER_URL}/api/projects/version`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        action: "delete",
+        versionId,
+      }),
+    });
+
+    return res.ok;
+  } catch (err) {
+    console.error("Error deleting project version:", err);
     return false;
   }
 };
