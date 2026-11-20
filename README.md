@@ -12,7 +12,10 @@ Florepy is an AI-powered architectural visualization platform that turns flat 2D
 
 * **2D to 3D AI Transformation** – Convert architectural floor plans (JPG, PNG, WebP, SVG) into top-down, photorealistic 3D models using AI inference.
 * **Interactive Comparison Slider** – Inspect structural details side-by-side with a smooth, interactive before/after overlay slider.
-* **Client Review & Spatial Feedback Pins** – Share secure client review links with optional passcode protection. Clients can drop spatial comment pins directly on designs, while owners manage and resolve feedback.
+* **Project Versioning & Iterations** – Create sequential design revisions with automated AI 3D rendering per iteration, configurable retention caps (up to 5 versions, 30 days), and baseline Version 1 protection.
+* **Feedback-Gated Revision Lifecycle** – Enforce comment resolution before publishing revisions, archiving resolved feedback per version while providing a clean comment slate for subsequent iterations.
+* **Revision Switching & Asset Downloads** – Seamlessly switch between historical iterations to compare progress and export high-resolution 3D renders or 2D architectural drawings for any version.
+* **Client Review & Spatial Feedback Pins** – Share secure review links with optional passcode protection. Clients can drop spatial comment pins directly on active designs without needing an account.
 * **Responsive Pin Positioning** – Dynamic letterbox and aspect-ratio detection locks review pins to precise image coordinates across all screen resolutions and window resizes.
 * **Client-Side Preprocessing** – In-browser vector (SVG) rasterization on an HTML5 canvas to guarantee high-contrast, AI-ready inputs.
 * **Puter Cloud Ecosystem** – Built-in authentication, decentralized cloud file storage (`puter.fs`), key-value state (`puter.kv`), and static hosting via Puter.js.
@@ -99,6 +102,8 @@ florepy/
 │   ├── AuthProvider.tsx          # Authentication context & session lifecycle
 │   ├── NavBar.tsx                # Header navigation & Puter sign-in
 │   └── Upload.tsx                # Drag-and-drop dropzone & SVG rasterizer
+├── docs/
+│   └── architecture.md           # System architecture, KV store model & data flow
 ├── lib/
 │   ├── ai.action.ts              # AI model integration & prompt orchestration
 │   ├── constants.ts              # System constraints & validation logic
