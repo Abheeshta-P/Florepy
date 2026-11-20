@@ -23,6 +23,19 @@ interface ProjectReview {
   resolved?: boolean;
 }
 
+interface ProjectVersion {
+  id: string;
+  versionNumber: number;
+  name?: string;
+  sourceImage: string;
+  sourcePath?: string | null;
+  renderedImage?: string | null;
+  renderedPath?: string | null;
+  timestamp: number;
+  createdAt: string;
+  reviews?: ProjectReview[];
+}
+
 interface DesignItem {
   id: string;
   name?: string | null;
@@ -40,6 +53,13 @@ interface DesignItem {
   reviewToken?: string | null;
   reviewPasscode?: string | null;
   reviews?: ProjectReview[];
+
+  // Step 2: Versioning System
+  activeVersionId?: string | null;
+  versions?: ProjectVersion[];
+  clientCanViewVersions?: boolean;
+  maxVersions?: number;
+  retentionDays?: number;
 }
 
 interface DesignConfig {
@@ -129,7 +149,7 @@ interface StoreHostedImageParams {
   hosting: HostingConfig | null;
   url: string;
   projectId: string;
-  label: "source" | "rendered";
+  label: "source" | "rendered" | string;
   isPublic?: boolean;
 }
 

@@ -36,7 +36,7 @@ Puter KV does not employ relational SQL tables (no CREATE TABLE statements) or d
 Virtual tables are constructed using explicit namespace prefixes:
 
 | Namespace Prefix | Scope | Virtual Table Purpose | Access Level |
-| | | | |
+| -- | -- | -- | -- |
 | florepy_project_ | userPuter.kv | Owner Master Projects | Authenticated owner only |
 | florepy_review_ | me.puter.kv | Client Review Sessions | Owner and invited clients holding token |
 | florepy_community_ | me.puter.kv | Public Showcase Registry | Publicly accessible to any user or guest |
@@ -189,7 +189,7 @@ A ResizeObserver continuously monitors container dimensions to update bounds and
 All endpoints are hosted on the Puter Worker microservice:
 
 | Endpoint | Method | Auth Required | Functionality |
-| | | | |
+| --- | --- | --- | --- |
 | /api/projects/save | POST | Yes (userPuter) | Persists project metadata, merges existing KV state, and syncs image paths. |
 | /api/projects/list | GET | Yes (userPuter) | Scans florepy_project_* in user KV and aggregates review counts for Dashboard. |
 | /api/projects/get | GET | Conditional | Retrieves project by ID. Checks owner vault first, then token-gated review store, then community store. |
@@ -207,3 +207,76 @@ Review mutations are processed through explicit action strings:
 - sync: Allowed strictly for project owner. Syncs reviewToken, reviewPasscode, or asset paths.
 
 Once modified, the worker saves the updated review record to me.puter.kv under florepy_review_${projectId}. If the caller is the authenticated owner, it simultaneously mirrors the changes to the owner personal KV store under florepy_project_${projectId}.
+
+## 8. Versioning Engine and Revision Lifecycle (Step 2)
+
+### Iteration Workflow
+The versioning system supports iterative architectural refinement between the builder and the client:
+1. Builder creates initial project (Version 1) with floor plan and 3D visualization.
+2. Client inspects Version 1 via the private review link and drops review pins.
+3. Builder inspects comments on Version 1 and addresses feedback. All comments on the active version must be marked resolved before a new revision can be created.
+4. Builder uploads an updated floor plan as a new revision (Version 2).
+5. Version 2 is initialized with a fresh, empty review thread (`reviews: []`).
+6. Client opens the review link to see Version 2, verifies the revision, and leaves new comments.
+7. Earlier versions and their corresponding comments remain preserved in history.
+
+### Version-Scoped Storage Structure
+Each project maintains an array of `ProjectVersion` objects:
+
+```typescript
+interface ProjectVersion {
+  id: string; // e.g. "ver_1720020000_a1b2"
+  versionNumber: number; // 1, 2, 3...
+  name?: string; // Optional custom label e.g. "Updated Open Kitchen"
+  sourceImage: string; // Puter FS path or hosted URL
+  renderedImage?: string | null;
+  timestamp: number; // Unix epoch ms
+  createdAt: string; // ISO date string
+  reviews?: ProjectReview[]; // Review pins scoped specifically to this revision
+}
+```
+
+### Version Capping and Till-Date Retention Pruning
+To prevent unbounded storage usage in Puter FS and KV, the system applies automated pruning on every revision save and project fetch:
+- Default Max Versions Cap: 5 versions per project.
+- Default Retention Period: 30 days.
+- Pruning Rules:
+  1. Active Version Protection: The currently active version (`activeVersionId`) is always protected and never pruned.
+  2. Fallback Protection: At least one version is always retained.
+  3. Expiration Pruning: Versions older than `now - (retentionDays * 86400000)` are expired, except the active version.
+  4. Cap Overflow Pruning: If surviving versions exceed `maxVersions`, the oldest non-active versions are pruned first.
+
+```javascript
+function pruneVersions(versions, activeVersionId, maxVersions = 5, retentionDays = 30) {
+  if (!Array.isArray(versions) || versions.length === 0) return [];
+  const now = Date.now();
+  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
+  const sorted = [...versions].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  const withinRetention = sorted.filter((v, idx) => {
+    if (v.id === activeVersionId || idx === 0) return true;
+    return now - (v.timestamp || 0) <= maxAgeMs;
+  });
+
+  if (withinRetention.length <= maxVersions) return withinRetention;
+
+  const active = withinRetention.find((v) => v.id === activeVersionId) || withinRetention[0];
+  const others = withinRetention.filter((v) => v.id !== active.id);
+  const cappedOthers = others.slice(0, maxVersions - 1);
+
+  return [active, ...cappedOthers].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+```
+
+### Role-Based Visibility Matrix
+
+| Persona | Access Type | Version History Visibility | Actions Allowed |
+| --- | --- | --- | --- |
+| Builder (Owner) | Master Account | Full access to all versions | Create new revision, switch active version, download 3D and 2D assets, resolve comments. |
+| Client (Review Mode) | `?review=TOKEN` | Active version only (builder managed) | Frictionless guest review: views current active 3D render and floor plan, places review pins, resolves own feedback. No account needed. |
+| Community User | Public Feed | None (latest version only) | Views only current 3D render and floor plan. Versions array and reviews are completely stripped. |
+
+### Version Asset Downloads
+Both the Builder and authorized Clients can download version assets directly from the visualizer:
+- Download 3D Render: Exports the high-resolution 3D visualization for the active/selected version (`florepy-[name]-v[N]-3D.png`).
+- Download Floor Plan: Exports the original 2D architectural drawing (`florepy-[name]-v[N]-floorplan.[ext]`).

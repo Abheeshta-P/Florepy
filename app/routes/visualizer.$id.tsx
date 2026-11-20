@@ -8,8 +8,13 @@ import Modal from "../../components/ui/Modal";
 import ProjectNotFound from "../../components/ProjectNotFound";
 import {
   Check,
+  ChevronDown,
+  Clock,
   Copy,
   Download,
+  FileDown,
+  FileImage,
+  GitBranch,
   Globe,
   Loader2,
   Lock,
@@ -18,16 +23,25 @@ import {
   RefreshCcw,
   Share2,
   Trash2,
+  UploadCloud,
   X,
 } from "lucide-react";
 import {
   createProject,
+  createProjectRevision,
   ensureHostedReviewImages,
   getProjectById,
   resolveDisplayUrl,
+  switchProjectVersion,
   toggleProjectPublic,
   updateProjectReviews,
+  updateProjectVersionSettings,
 } from "../../lib/puter.action";
+import {
+  ALLOWED_FILE_EXTENSIONS,
+  ALLOWED_IMAGE_TYPES,
+  MAX_FILE_SIZE_BYTES,
+} from "../../lib/constants";
 import {
   ReactCompareSlider,
   ReactCompareSliderImage,
@@ -78,6 +92,17 @@ function VisualizerId() {
   const [passcodeInput, setPasscodeInput] = useState("");
   const [isSavingPasscode, setIsSavingPasscode] = useState(false);
   const [passcodeToast, setPasscodeToast] = useState<string | null>(null);
+
+  // Versioning & revision states
+  const [showVersionDropdown, setShowVersionDropdown] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [showNewRevisionModal, setShowNewRevisionModal] = useState(false);
+  const [revisionName, setRevisionName] = useState("");
+  const [revisionFile, setRevisionFile] = useState<File | null>(null);
+  const [revisionFileBase64, setRevisionFileBase64] = useState<string | null>(null);
+  const [isCreatingRevision, setIsCreatingRevision] = useState(false);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
+  const [isResolvingAll, setIsResolvingAll] = useState(false);
 
   // Review interaction states
   const [isReviewLocked, setIsReviewLocked] = useState(false);
@@ -241,10 +266,19 @@ function VisualizerId() {
 
   const isClientReviewMode = Boolean(
     !isOwner &&
-    reviewTokenFromUrl &&
-    project?.reviewToken &&
-    reviewTokenFromUrl === project.reviewToken,
+      reviewTokenFromUrl &&
+      project?.reviewToken &&
+      reviewTokenFromUrl === project.reviewToken,
   );
+
+  const currentActiveVer =
+    project?.versions?.find((v) => v.id === project?.activeVersionId) ||
+    project?.versions?.[0] ||
+    null;
+  const activeVersionReviews =
+    currentActiveVer?.reviews || project?.reviews || [];
+  const unresolvedReviews = activeVersionReviews.filter((r) => !r.resolved);
+  const hasUnresolvedReviews = unresolvedReviews.length > 0;
 
   // Review permissions:
   // "Add Review" is strictly for clients viewing the shared review link.
@@ -551,6 +585,12 @@ function VisualizerId() {
       };
 
       const updatedReviews = [...(project.reviews || []), newReview];
+      const updatedVersions = (project.versions || []).map((ver) => {
+        if (ver.id === (project.activeVersionId || ver.id)) {
+          return { ...ver, reviews: [...(ver.reviews || []), newReview] };
+        }
+        return ver;
+      });
 
       if (typeof window !== "undefined") {
         localStorage.setItem("florepy_reviewer_name", author);
@@ -565,7 +605,13 @@ function VisualizerId() {
       }
 
       setProject((prev) =>
-        prev ? { ...prev, reviews: updatedReviews } : prev,
+        prev
+          ? {
+              ...prev,
+              reviews: updatedReviews,
+              versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
+            }
+          : prev,
       );
       setPendingReviewPin(null);
       setReviewText("");
@@ -577,6 +623,7 @@ function VisualizerId() {
         projectId: project.id,
         reviewToken: reviewTokenFromUrl || project.reviewToken,
         review: newReview,
+        versionId: project.activeVersionId || undefined,
         action: "add",
       });
     } catch (err) {
@@ -595,16 +642,82 @@ function VisualizerId() {
     const updatedReviews = (project.reviews || []).map((r) =>
       r.id === reviewId ? { ...r, resolved: newResolved } : r,
     );
+    const updatedVersions = (project.versions || []).map((ver) => {
+      if (ver.id === (project.activeVersionId || ver.id)) {
+        return {
+          ...ver,
+          reviews: (ver.reviews || []).map((r) =>
+            r.id === reviewId ? { ...r, resolved: newResolved } : r,
+          ),
+        };
+      }
+      return ver;
+    });
 
-    setProject((prev) => (prev ? { ...prev, reviews: updatedReviews } : prev));
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            reviews: updatedReviews,
+            versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
+          }
+        : prev,
+    );
 
     await updateProjectReviews({
       projectId: project.id,
       reviewToken: project.reviewToken,
       reviewId,
       resolved: newResolved,
+      versionId: project.activeVersionId || undefined,
       action: "resolve",
     });
+  };
+
+  const handleResolveAllReviews = async () => {
+    if (!project?.id || !isOwner || isResolvingAll) return;
+    try {
+      setIsResolvingAll(true);
+      const updatedReviews = activeVersionReviews.map((r) => ({
+        ...r,
+        resolved: true,
+      }));
+      const updatedVersions = (project.versions || []).map((ver) => {
+        if (ver.id === (project.activeVersionId || ver.id)) {
+          return {
+            ...ver,
+            reviews: (ver.reviews || []).map((r) => ({
+              ...r,
+              resolved: true,
+            })),
+          };
+        }
+        return ver;
+      });
+
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              reviews: updatedReviews,
+              versions:
+                updatedVersions.length > 0 ? updatedVersions : prev.versions,
+            }
+          : prev,
+      );
+
+      await updateProjectReviews({
+        projectId: project.id,
+        reviewToken: project.reviewToken,
+        reviews: updatedReviews,
+        versionId: project.activeVersionId || undefined,
+        action: "sync",
+      });
+    } catch (err) {
+      console.error("Failed to resolve all reviews:", err);
+    } finally {
+      setIsResolvingAll(false);
+    }
   };
 
   const handleEditReview = async (reviewId: string) => {
@@ -618,9 +731,26 @@ function VisualizerId() {
       const updatedReviews = (project.reviews || []).map((r) =>
         r.id === reviewId ? { ...r, text: updatedText } : r,
       );
+      const updatedVersions = (project.versions || []).map((ver) => {
+        if (ver.id === (project.activeVersionId || ver.id)) {
+          return {
+            ...ver,
+            reviews: (ver.reviews || []).map((r) =>
+              r.id === reviewId ? { ...r, text: updatedText } : r,
+            ),
+          };
+        }
+        return ver;
+      });
 
       setProject((prev) =>
-        prev ? { ...prev, reviews: updatedReviews } : prev,
+        prev
+          ? {
+              ...prev,
+              reviews: updatedReviews,
+              versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
+            }
+          : prev,
       );
       setEditingReviewId(null);
       setEditingReviewText("");
@@ -630,6 +760,7 @@ function VisualizerId() {
         reviewToken: reviewTokenFromUrl || project.reviewToken,
         reviewId,
         text: updatedText,
+        versionId: project.activeVersionId || undefined,
         action: "edit",
       });
     } catch (err) {
@@ -647,64 +778,271 @@ function VisualizerId() {
     const updatedReviews = (project.reviews || []).filter(
       (r) => r.id !== reviewId,
     );
+    const updatedVersions = (project.versions || []).map((ver) => {
+      if (ver.id === (project.activeVersionId || ver.id)) {
+        return {
+          ...ver,
+          reviews: (ver.reviews || []).filter((r) => r.id !== reviewId),
+        };
+      }
+      return ver;
+    });
 
-    setProject((prev) => (prev ? { ...prev, reviews: updatedReviews } : prev));
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            reviews: updatedReviews,
+            versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
+          }
+        : prev,
+    );
     if (activeReviewId === reviewId) setActiveReviewId(null);
 
     await updateProjectReviews({
       projectId: project.id,
       reviewToken: reviewTokenFromUrl || project.reviewToken,
       reviewId,
+      versionId: project.activeVersionId || undefined,
       action: "delete",
     });
   };
 
-  const handleExport = async () => {
-    if (!currentImage) return;
+  const handleSelectVersion = async (versionId: string) => {
+    if (!project?.id || versionId === project.activeVersionId) {
+      setShowVersionDropdown(false);
+      return;
+    }
+
+    const targetVer = (project.versions || []).find((v) => v.id === versionId);
+    if (!targetVer) return;
+
+    setShowVersionDropdown(false);
+    setActiveReviewId(null);
+    setPendingReviewPin(null);
+    setIsPlacingReview(false);
+
+    let displaySource = targetVer.sourceImage;
+    let displayRender = targetVer.renderedImage;
+
+    if (displaySource && !isDisplayableUrl(displaySource)) {
+      displaySource = (await resolveDisplayUrl(displaySource)) || displaySource;
+    }
+    if (displayRender && !isDisplayableUrl(displayRender)) {
+      displayRender = (await resolveDisplayUrl(displayRender)) || displayRender;
+    }
+
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            activeVersionId: versionId,
+            sourceImage: displaySource,
+            renderedImage: displayRender,
+            reviews: targetVer.reviews || [],
+          }
+        : prev,
+    );
+
+    setCurrentImage(displayRender || null);
+
+    void switchProjectVersion({
+      projectId: project.id,
+      versionId,
+      reviewToken: reviewTokenFromUrl || project.reviewToken,
+    });
+  };
+
+  const handleDownloadAsset = async (assetType: "render" | "source") => {
+    const targetUrl = assetType === "render" ? currentImage : project?.sourceImage;
+    if (!targetUrl) return;
 
     try {
-      let data = await fetchBlobFromUrl(currentImage);
-
-      // Fallback: if fetch failed (e.g. Puter read token expired), read directly from puter.fs
+      let data = await fetchBlobFromUrl(targetUrl);
       if (!data && id) {
-        try {
-          const candidatePaths = [
-            `project/${id}/rendered.png`,
-            `project/${id}/rendered.jpg`,
-            `project/${id}/rendered.jpeg`,
-            `project/${id}/source.png`,
-            `project/${id}/source.jpg`,
-            `project/${id}/source.jpeg`,
-          ];
-          for (const filePath of candidatePaths) {
-            try {
-              const blob = await puter.fs.read(filePath);
-              if (blob && blob.size > 0) {
-                data = { blob, contentType: blob.type || "image/png" };
-                break;
-              }
-            } catch {
-              // try next path
+        const candidatePaths =
+          assetType === "render"
+            ? [
+                `project/${id}/rendered.png`,
+                `project/${id}/rendered.jpg`,
+                `project/${id}/rendered.jpeg`,
+              ]
+            : [
+                `project/${id}/source.png`,
+                `project/${id}/source.jpg`,
+                `project/${id}/source.jpeg`,
+                `project/${id}/source.svg`,
+              ];
+        for (const filePath of candidatePaths) {
+          try {
+            const blob = await puter.fs.read(filePath);
+            if (blob && blob.size > 0) {
+              data = { blob, contentType: blob.type || "image/png" };
+              break;
             }
-          }
-        } catch (fsErr) {
-          console.warn("Direct Puter FS read fallback failed:", fsErr);
+          } catch {}
         }
       }
 
       if (!data) throw new Error("Failed to fetch image blob");
 
-      const ext = getImageExtension(data.contentType, currentImage) || "png";
+      const ext =
+        getImageExtension(data.contentType, targetUrl) ||
+        (assetType === "source" && targetUrl.endsWith(".svg") ? "svg" : "png");
+      const currentVerObj = project?.versions?.find(
+        (v) => v.id === project?.activeVersionId,
+      );
+      const verLabel = currentVerObj ? `v${currentVerObj.versionNumber}` : "v1";
+      const typeLabel = assetType === "render" ? "3D" : "floorplan";
+      const projectName = (project?.name || `Residence-${id}`).replace(
+        /\s+/g,
+        "_",
+      );
+
       const blobUrl = URL.createObjectURL(data.blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = `florepy-${project?.name || `Residence-${id || "render"}`}.${ext}`;
+      link.download = `florepy-${projectName}-${verLabel}-${typeLabel}.${ext}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
+      setShowExportDropdown(false);
     } catch (error) {
-      console.error("Failed to export image:", error);
+      console.error(`Failed to export ${assetType}:`, error);
+    }
+  };
+
+  const handleRevisionFileSelect = (selectedFile: File) => {
+    const isValidType =
+      ALLOWED_IMAGE_TYPES.includes(selectedFile.type) ||
+      ALLOWED_FILE_EXTENSIONS.some((ext) =>
+        selectedFile.name.toLowerCase().endsWith(ext),
+      );
+    if (!isValidType) {
+      setRevisionError(
+        "Unsupported file format. Please upload a JPG, PNG, WEBP, or SVG file.",
+      );
+      return;
+    }
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setRevisionError("File size exceeds 10MB limit.");
+      return;
+    }
+
+    setRevisionError(null);
+    setRevisionFile(selectedFile);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setRevisionFileBase64(reader.result as string);
+    };
+    reader.readAsDataURL(selectedFile);
+  };
+
+  const handleCreateRevisionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project?.id || !revisionFileBase64 || isCreatingRevision) return;
+
+    if (hasUnresolvedReviews) {
+      setRevisionError(
+        `Cannot create revision: There are ${unresolvedReviews.length} unresolved comment${
+          unresolvedReviews.length > 1 ? "s" : ""
+        }. Please resolve all feedback pins first.`,
+      );
+      return;
+    }
+
+    try {
+      setIsCreatingRevision(true);
+      setRevisionError(null);
+
+      // 1. Run AI 3D visualization on the new revision floor plan
+      const genResult = await generate3DView({
+        sourceImage: revisionFileBase64,
+      });
+      const renderedImage = genResult.renderedImage || null;
+
+      // 2. Call createProjectRevision with clean reviews array
+      const revisionData = await createProjectRevision({
+        projectId: project.id,
+        sourceImage: revisionFileBase64,
+        renderedImage,
+        name: revisionName.trim() || undefined,
+        isPublic: Boolean(project.isPublic),
+      });
+
+      if (!revisionData || !revisionData.success) {
+        throw new Error("Failed to save new revision.");
+      }
+
+      // 3. Reset form and update state with empty comments on the new revision
+      setShowNewRevisionModal(false);
+      setRevisionFile(null);
+      setRevisionFileBase64(null);
+      setRevisionName("");
+
+      const finalRender =
+        renderedImage ||
+        (revisionData.currentVersion?.renderedImage
+          ? await resolveDisplayUrl(revisionData.currentVersion.renderedImage)
+          : null);
+      const finalSource = revisionFileBase64;
+
+      let finalVersions: ProjectVersion[] =
+        (revisionData.versions as ProjectVersion[]) || project.versions || [];
+      const hasV1 = finalVersions.some(
+        (v: ProjectVersion) => v.versionNumber === 1,
+      );
+      if (!hasV1 && finalVersions.length > 0) {
+        const v2 =
+          finalVersions.find((v: ProjectVersion) => v.versionNumber === 2) ||
+          finalVersions[0];
+        const v1Timestamp =
+          Number(project.id) ||
+          (v2.timestamp ? v2.timestamp - 3600000 : Date.now() - 3600000);
+        const v1Reviews =
+          Array.isArray(project.reviews) &&
+          project.reviews.length > 0 &&
+          (!v2 || (v2.reviews?.length || 0) === 0)
+            ? project.reviews
+            : [];
+        const v1: ProjectVersion = {
+          id: `ver_${project.id}_v1`,
+          versionNumber: 1,
+          name: "Version 1",
+          sourceImage: `project/${project.id}/source.png`,
+          renderedImage: `project/${project.id}/rendered.png`,
+          timestamp: v1Timestamp,
+          createdAt: new Date(v1Timestamp).toISOString(),
+          reviews: v1Reviews,
+        };
+        finalVersions = [...finalVersions, v1].sort(
+          (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0),
+        );
+      }
+
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              activeVersionId: revisionData.activeVersionId,
+              versions: finalVersions,
+              sourceImage: finalSource,
+              renderedImage: finalRender,
+              reviews: [], // Fresh comment thread for the new revision!
+            }
+          : prev,
+      );
+
+      setCurrentImage(finalRender || null);
+    } catch (err: any) {
+      console.error("Revision creation failed:", err);
+      setRevisionError(
+        err.message || "Failed to create new revision. Please try again.",
+      );
+    } finally {
+      setIsCreatingRevision(false);
     }
   };
 
@@ -814,8 +1152,53 @@ function VisualizerId() {
             setIsReviewLocked(true);
           }
         }
-        let sourceUrl = fetchedProject.sourceImage;
-        let renderUrl = fetchedProject.renderedImage;
+        let versions = fetchedProject.versions;
+        if (Array.isArray(versions) && versions.length > 0) {
+          const hasV1 = versions.some((v) => v.versionNumber === 1);
+          if (!hasV1) {
+            const v2 =
+              versions.find((v) => v.versionNumber === 2) || versions[0];
+            const v1Timestamp =
+              Number(id) ||
+              (v2.timestamp ? v2.timestamp - 3600000 : Date.now() - 3600000);
+            const v1Source =
+              fetchedProject.sourcePath || `project/${id}/source.png`;
+            const v1Render =
+              fetchedProject.renderedPath || `project/${id}/rendered.png`;
+            const v1Reviews =
+              Array.isArray(fetchedProject.reviews) &&
+              fetchedProject.reviews.length > 0 &&
+              (!v2 || (v2.reviews?.length || 0) === 0)
+                ? fetchedProject.reviews
+                : [];
+            const v1: ProjectVersion = {
+              id: `ver_${id}_v1`,
+              versionNumber: 1,
+              name: "Version 1",
+              sourceImage: v1Source,
+              renderedImage: v1Render,
+              timestamp: v1Timestamp,
+              createdAt: new Date(v1Timestamp).toISOString(),
+              reviews: v1Reviews,
+            };
+            versions = [...versions, v1].sort(
+              (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0),
+            );
+          }
+        }
+
+        const activeVer =
+          (versions || []).find(
+            (v) => v.id === fetchedProject.activeVersionId,
+          ) || versions?.[0];
+
+        let sourceUrl = activeVer?.sourceImage || fetchedProject.sourceImage;
+        let renderUrl =
+          activeVer?.renderedImage !== undefined
+            ? activeVer.renderedImage
+            : fetchedProject.renderedImage;
+        const currentReviews =
+          activeVer?.reviews || fetchedProject.reviews || [];
 
         if (sourceUrl && !isDisplayableUrl(sourceUrl)) {
           sourceUrl = (await resolveDisplayUrl(sourceUrl)) || sourceUrl;
@@ -826,9 +1209,12 @@ function VisualizerId() {
 
         const finalizedProject = {
           ...fetchedProject,
+          versions,
           sourceImage: sourceUrl,
           renderedImage: renderUrl,
+          reviews: currentReviews,
         };
+
 
         setProject(finalizedProject);
         setCurrentImage(renderUrl || null);
@@ -916,7 +1302,121 @@ function VisualizerId() {
           <div className="panel shadow-sm">
             <div className="panel-header">
               <div className="panel-meta">
-                <p>Project</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                    Project
+                  </p>
+                  {isOwner &&
+                    project?.versions &&
+                    project.versions.length > 0 && (
+                      <div className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowVersionDropdown((prev) => !prev);
+                            setShowExportDropdown(false);
+                          }}
+                          className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold rounded-md bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 transition-colors cursor-pointer border border-zinc-200/70"
+                          title="Click to view and switch revisions"
+                        >
+                          <GitBranch size={11} className="text-zinc-500" />
+                          <span>
+                            {project.versions.find(
+                              (v) => v.id === project.activeVersionId,
+                            )?.name ||
+                              `Version ${
+                                project.versions.find(
+                                  (v) => v.id === project.activeVersionId,
+                                )?.versionNumber || 1
+                              }`}
+                          </span>
+                          <ChevronDown size={11} className="text-zinc-500" />
+                        </button>
+
+                        {showVersionDropdown && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute top-full left-0 mt-1 w-64 bg-white rounded-xl shadow-lg border border-zinc-200/80 p-1.5 z-50 space-y-1"
+                          >
+                            <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                              <span>Project Revisions</span>
+                              <span>
+                                {project.versions.length} /{" "}
+                                {project.maxVersions || 5}
+                              </span>
+                            </div>
+                            <div className="max-h-52 overflow-y-auto space-y-0.5">
+                              {project.versions.map((ver) => {
+                                const isSelected =
+                                  ver.id ===
+                                  (project.activeVersionId ||
+                                    project.versions![0].id);
+                                const reviewCount = ver.reviews?.length || 0;
+                                return (
+                                  <button
+                                    key={ver.id}
+                                    type="button"
+                                    onClick={() =>
+                                      void handleSelectVersion(ver.id)
+                                    }
+                                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? "bg-zinc-100 text-zinc-950 font-semibold"
+                                        : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                                    }`}
+                                  >
+                                    <div className="truncate pr-2">
+                                      <p className="truncate text-xs font-medium">
+                                        {ver.name ||
+                                          `Version ${ver.versionNumber}`}
+                                      </p>
+                                      <p className="text-[10px] text-zinc-400 flex items-center gap-1">
+                                        <Clock size={10} />{" "}
+                                        {new Date(
+                                          ver.timestamp,
+                                        ).toLocaleDateString()}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {reviewCount > 0 && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-200/60 text-zinc-600">
+                                          {reviewCount}
+                                        </span>
+                                      )}
+                                      {isSelected && (
+                                        <Check
+                                          size={12}
+                                          className="text-emerald-600"
+                                        />
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {isOwner && (
+                              <div className="pt-1 border-t border-zinc-100">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowVersionDropdown(false);
+                                    setShowNewRevisionModal(true);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-zinc-50 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
+                                >
+                                  <span className="flex items-center gap-1.5">
+                                    <UploadCloud size={13} />
+                                    <span>Upload New Revision</span>
+                                  </span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                </div>
                 <h2>{project?.name || `Residence ${id}`}</h2>
                 <p className="note">
                   Created by{" "}
@@ -947,15 +1447,68 @@ function VisualizerId() {
                     <span>{isPlacingReview ? "Done" : "Add Review"}</span>
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  onClick={handleExport}
-                  className="export"
-                  disabled={!currentImage || isProcessing}
-                >
-                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />{" "}
-                  Export
-                </Button>
+                {isOwner && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowNewRevisionModal(true)}
+                    disabled={isProcessing}
+                    title="Upload updated floor plan for next revision iteration"
+                    className={`h-8 sm:h-9 px-2.5 sm:px-3 text-[11px] sm:text-xs rounded-lg shadow-xs flex items-center justify-center font-medium ${
+                      hasUnresolvedReviews
+                        ? "text-zinc-700 bg-zinc-50 border-zinc-200"
+                        : "text-zinc-800 border-zinc-300 hover:border-zinc-400"
+                    }`}
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
+                    <span className="hidden sm:inline">New Revision</span>
+                    <span className="sm:hidden">Revision</span>
+                  </Button>
+                )}
+                <div className="relative inline-block">
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowExportDropdown((prev) => !prev);
+                      setShowVersionDropdown(false);
+                    }}
+                    className="export"
+                    disabled={
+                      (!currentImage && !project?.sourceImage) || isProcessing
+                    }
+                  >
+                    <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
+                    Export
+                    <ChevronDown className="w-3 h-3 ml-1 opacity-70" />
+                  </Button>
+
+                  {showExportDropdown && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full right-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-zinc-200/80 p-1 z-50 space-y-0.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadAsset("render")}
+                        disabled={!currentImage}
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 rounded-lg flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <FileImage size={13} className="text-zinc-500" />
+                        <span>Download 3D Render</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadAsset("source")}
+                        disabled={!project?.sourceImage}
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 rounded-lg flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <FileDown size={13} className="text-zinc-500" />
+                        <span>Download Floor Plan</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {isOwner ? (
                   <Button
                     size="sm"
@@ -1579,6 +2132,8 @@ function VisualizerId() {
                   </div>
                 )}
               </div>
+
+
             </div>
           )}
 
@@ -1673,6 +2228,168 @@ function VisualizerId() {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* Upload New Revision Modal for Builder */}
+      <Modal
+        isOpen={showNewRevisionModal && isOwner}
+        onClose={() => {
+          if (!isCreatingRevision) {
+            setShowNewRevisionModal(false);
+            setRevisionFile(null);
+            setRevisionFileBase64(null);
+            setRevisionError(null);
+          }
+        }}
+        title="Upload New Project Revision"
+        disabled={isCreatingRevision}
+        maxWidth="md"
+      >
+        <form onSubmit={handleCreateRevisionSubmit} className="space-y-4 pt-1">
+          <p className="text-xs text-zinc-500 leading-normal">
+            Upload an updated floor plan based on client review feedback.
+            This creates a new iteration with a fresh review thread while
+            preserving past versions and comments.
+          </p>
+
+          {hasUnresolvedReviews && (
+            <div className="flex items-center justify-between text-xs text-amber-600 pt-0.5">
+              <p>
+                <span className="font-semibold text-amber-600">
+                  {unresolvedReviews.length} unresolved{" "}
+                  {unresolvedReviews.length === 1 ? "comment" : "comments"}.
+                </span>{" "}
+                Resolve all comments to create a new revision.
+              </p>
+              <button
+                type="button"
+                onClick={handleResolveAllReviews}
+                disabled={isResolvingAll}
+                className="text-xs font-semibold text-amber-700 hover:text-amber-800 hover:underline cursor-pointer disabled:opacity-50 shrink-0 ml-3"
+              >
+                {isResolvingAll ? "Resolving..." : "Resolve All"}
+              </button>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[11px] font-semibold text-zinc-700 mb-1">
+              Revision Label (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder={`Revision ${(project?.versions?.length || 0) + 1} (e.g. Updated Kitchen & Patio)`}
+              value={revisionName}
+              onChange={(e) => setRevisionName(e.target.value)}
+              disabled={isCreatingRevision}
+              className="w-full text-xs bg-zinc-50 border border-zinc-200 focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 rounded-md px-2.5 py-2 text-zinc-900 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-zinc-700 mb-1.5">
+              Floor Plan File (JPG, PNG, WEBP, SVG){" "}
+              <span className="text-red-500">*</span>
+            </label>
+            <div
+              className={`border-2 border-dashed rounded-xl p-4 sm:p-6 text-center transition-colors ${
+                revisionFile
+                  ? "border-emerald-400 bg-emerald-50/20"
+                  : "border-zinc-200 hover:border-zinc-400 bg-zinc-50/50"
+              }`}
+            >
+              {revisionFile ? (
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-semibold text-xs">
+                    <Check size={16} />
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-800">
+                    {revisionFile.name}
+                  </p>
+                  <p className="text-[10px] text-zinc-400">
+                    {(revisionFile.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevisionFile(null);
+                      setRevisionFileBase64(null);
+                    }}
+                    className="text-[11px] text-red-500 hover:underline mt-1 cursor-pointer"
+                  >
+                    Choose a different file
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <UploadCloud className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
+                  <p className="text-xs text-zinc-700 font-medium mb-1">
+                    Drag and drop your updated floor plan here, or click to browse
+                  </p>
+                  <p className="text-[10px] text-zinc-400 mb-3">
+                    Up to 10MB per file
+                  </p>
+                  <label className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-md bg-zinc-950 text-white hover:bg-black transition-colors cursor-pointer">
+                    Browse File
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.svg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleRevisionFileSelect(file);
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+            {revisionError && (
+              <p className="text-[11px] text-red-600 font-medium mt-1.5">
+                {revisionError}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">
+            <button
+              type="button"
+              disabled={isCreatingRevision}
+              onClick={() => {
+                setShowNewRevisionModal(false);
+                setRevisionFile(null);
+                setRevisionFileBase64(null);
+                setRevisionError(null);
+              }}
+              className="px-3 py-1.5 text-xs text-zinc-600 hover:text-zinc-900 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={
+                isCreatingRevision ||
+                !revisionFileBase64 ||
+                hasUnresolvedReviews
+              }
+              className="px-4 py-2 text-xs font-semibold text-white bg-zinc-950 hover:bg-black rounded-md transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
+            >
+              {isCreatingRevision ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  Generating 3D Revision...
+                </>
+              ) : hasUnresolvedReviews ? (
+                <span>Resolve Comments to Create</span>
+              ) : (
+                <>
+                  <UploadCloud size={13} />
+                  Create Revision
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* Review Passcode Lock Modal for Client */}
