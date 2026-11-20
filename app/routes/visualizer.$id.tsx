@@ -104,6 +104,7 @@ function VisualizerId() {
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [allowClientVersions, setAllowClientVersions] = useState(false);
   const [isSavingVersionSettings, setIsSavingVersionSettings] = useState(false);
+  const [isResolvingAll, setIsResolvingAll] = useState(false);
 
   // Review interaction states
   const [isReviewLocked, setIsReviewLocked] = useState(false);
@@ -267,10 +268,19 @@ function VisualizerId() {
 
   const isClientReviewMode = Boolean(
     !isOwner &&
-    reviewTokenFromUrl &&
-    project?.reviewToken &&
-    reviewTokenFromUrl === project.reviewToken,
+      reviewTokenFromUrl &&
+      project?.reviewToken &&
+      reviewTokenFromUrl === project.reviewToken,
   );
+
+  const currentActiveVer =
+    project?.versions?.find((v) => v.id === project?.activeVersionId) ||
+    project?.versions?.[0] ||
+    null;
+  const activeVersionReviews =
+    currentActiveVer?.reviews || project?.reviews || [];
+  const unresolvedReviews = activeVersionReviews.filter((r) => !r.resolved);
+  const hasUnresolvedReviews = unresolvedReviews.length > 0;
 
   // Review permissions:
   // "Add Review" is strictly for clients viewing the shared review link.
@@ -686,6 +696,52 @@ function VisualizerId() {
     });
   };
 
+  const handleResolveAllReviews = async () => {
+    if (!project?.id || !isOwner || isResolvingAll) return;
+    try {
+      setIsResolvingAll(true);
+      const updatedReviews = activeVersionReviews.map((r) => ({
+        ...r,
+        resolved: true,
+      }));
+      const updatedVersions = (project.versions || []).map((ver) => {
+        if (ver.id === (project.activeVersionId || ver.id)) {
+          return {
+            ...ver,
+            reviews: (ver.reviews || []).map((r) => ({
+              ...r,
+              resolved: true,
+            })),
+          };
+        }
+        return ver;
+      });
+
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              reviews: updatedReviews,
+              versions:
+                updatedVersions.length > 0 ? updatedVersions : prev.versions,
+            }
+          : prev,
+      );
+
+      await updateProjectReviews({
+        projectId: project.id,
+        reviewToken: project.reviewToken,
+        reviews: updatedReviews,
+        versionId: project.activeVersionId || undefined,
+        action: "sync",
+      });
+    } catch (err) {
+      console.error("Failed to resolve all reviews:", err);
+    } finally {
+      setIsResolvingAll(false);
+    }
+  };
+
   const handleEditReview = async (reviewId: string) => {
     if (!project?.id || !editingReviewText.trim()) return;
     const targetRev = (project.reviews || []).find((r) => r.id === reviewId);
@@ -909,6 +965,15 @@ function VisualizerId() {
   const handleCreateRevisionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!project?.id || !revisionFileBase64 || isCreatingRevision) return;
+
+    if (hasUnresolvedReviews) {
+      setRevisionError(
+        `Cannot create revision: There are ${unresolvedReviews.length} unresolved comment${
+          unresolvedReviews.length > 1 ? "s" : ""
+        }. Please resolve all feedback pins first.`,
+      );
+      return;
+    }
 
     try {
       setIsCreatingRevision(true);
@@ -1294,10 +1359,17 @@ function VisualizerId() {
                                     setShowVersionDropdown(false);
                                     setShowNewRevisionModal(true);
                                   }}
-                                  className="w-full px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-zinc-50 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                  className="w-full px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-zinc-50 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
                                 >
-                                  <UploadCloud size={13} />
-                                  <span>Upload New Revision</span>
+                                  <span className="flex items-center gap-1.5">
+                                    <UploadCloud size={13} />
+                                    <span>Upload New Revision</span>
+                                  </span>
+                                  {hasUnresolvedReviews && (
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-semibold">
+                                      {unresolvedReviews.length} to resolve
+                                    </span>
+                                  )}
                                 </button>
                               </div>
                             )}
@@ -1342,12 +1414,28 @@ function VisualizerId() {
                     variant="outline"
                     onClick={() => setShowNewRevisionModal(true)}
                     disabled={isProcessing}
-                    title="Upload updated floor plan for next revision iteration"
-                    className="h-8 sm:h-9 px-2.5 sm:px-3 text-[11px] sm:text-xs rounded-lg shadow-xs flex items-center justify-center font-medium text-zinc-800"
+                    title={
+                      hasUnresolvedReviews
+                        ? `Resolve all ${unresolvedReviews.length} comments to create new revision`
+                        : "Upload updated floor plan for next revision iteration"
+                    }
+                    className={`h-8 sm:h-9 px-2.5 sm:px-3 text-[11px] sm:text-xs rounded-lg shadow-xs flex items-center justify-center font-medium ${
+                      hasUnresolvedReviews
+                        ? "text-zinc-700 bg-zinc-50 border-zinc-200"
+                        : "text-zinc-800 border-zinc-300 hover:border-zinc-400"
+                    }`}
                   >
                     <UploadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
                     <span className="hidden sm:inline">New Revision</span>
                     <span className="sm:hidden">Revision</span>
+                    {hasUnresolvedReviews && (
+                      <span
+                        className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-semibold"
+                        title={`${unresolvedReviews.length} unresolved comments`}
+                      >
+                        {unresolvedReviews.length}
+                      </span>
+                    )}
                   </Button>
                 )}
                 <div className="relative inline-block">
@@ -2168,6 +2256,34 @@ function VisualizerId() {
             preserving past versions and comments.
           </p>
 
+          {hasUnresolvedReviews && (
+            <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold">
+                  !
+                </div>
+                <div>
+                  <h4 className="text-xs font-semibold text-amber-900">
+                    {unresolvedReviews.length} Unresolved{" "}
+                    {unresolvedReviews.length === 1 ? "Comment" : "Comments"}
+                  </h4>
+                  <p className="text-[11px] text-amber-800/90 leading-snug mt-0.5">
+                    All review comments on the current version must be resolved
+                    before creating a new revision.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleResolveAllReviews}
+                disabled={isResolvingAll}
+                className="shrink-0 px-2.5 py-1 text-[11px] font-semibold text-amber-900 bg-amber-200/90 hover:bg-amber-300 rounded-md transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isResolvingAll ? "Resolving..." : "Resolve All"}
+              </button>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] font-semibold text-zinc-700 mb-1">
               Revision Label (Optional)
@@ -2263,7 +2379,11 @@ function VisualizerId() {
             </button>
             <button
               type="submit"
-              disabled={isCreatingRevision || !revisionFileBase64}
+              disabled={
+                isCreatingRevision ||
+                !revisionFileBase64 ||
+                hasUnresolvedReviews
+              }
               className="px-4 py-2 text-xs font-semibold text-white bg-zinc-950 hover:bg-black rounded-md transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
             >
               {isCreatingRevision ? (
@@ -2271,6 +2391,8 @@ function VisualizerId() {
                   <Loader2 size={13} className="animate-spin" />
                   Generating 3D Revision...
                 </>
+              ) : hasUnresolvedReviews ? (
+                <span>Resolve Comments to Create</span>
               ) : (
                 <>
                   <UploadCloud size={13} />

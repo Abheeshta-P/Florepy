@@ -214,10 +214,11 @@ Once modified, the worker saves the updated review record to me.puter.kv under f
 The versioning system supports iterative architectural refinement between the builder and the client:
 1. Builder creates initial project (Version 1) with floor plan and 3D visualization.
 2. Client inspects Version 1 via the private review link and drops review pins.
-3. Builder inspects comments on Version 1, modifies the architectural layout, and uploads an updated floor plan as a new revision (Version 2).
-4. Version 2 is initialized with a fresh, empty review thread (`reviews: []`).
-5. Client opens the review link to see Version 2, verifies the revision, and leaves new comments.
-6. Earlier versions and their corresponding comments remain preserved in history.
+3. Builder inspects comments on Version 1 and addresses feedback. All comments on the active version must be marked resolved before a new revision can be created.
+4. Builder uploads an updated floor plan as a new revision (Version 2).
+5. Version 2 is initialized with a fresh, empty review thread (`reviews: []`).
+6. Client opens the review link to see Version 2, verifies the revision, and leaves new comments.
+7. Earlier versions and their corresponding comments remain preserved in history.
 
 ### Version-Scoped Storage Structure
 Each project maintains an array of `ProjectVersion` objects:
