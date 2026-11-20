@@ -36,7 +36,7 @@ Puter KV does not employ relational SQL tables (no CREATE TABLE statements) or d
 Virtual tables are constructed using explicit namespace prefixes:
 
 | Namespace Prefix | Scope | Virtual Table Purpose | Access Level |
-| | | | |
+| -- | -- | -- | -- |
 | florepy_project_ | userPuter.kv | Owner Master Projects | Authenticated owner only |
 | florepy_review_ | me.puter.kv | Client Review Sessions | Owner and invited clients holding token |
 | florepy_community_ | me.puter.kv | Public Showcase Registry | Publicly accessible to any user or guest |
@@ -189,7 +189,7 @@ A ResizeObserver continuously monitors container dimensions to update bounds and
 All endpoints are hosted on the Puter Worker microservice:
 
 | Endpoint | Method | Auth Required | Functionality |
-| | | | |
+| --- | --- | --- | --- |
 | /api/projects/save | POST | Yes (userPuter) | Persists project metadata, merges existing KV state, and syncs image paths. |
 | /api/projects/list | GET | Yes (userPuter) | Scans florepy_project_* in user KV and aggregates review counts for Dashboard. |
 | /api/projects/get | GET | Conditional | Retrieves project by ID. Checks owner vault first, then token-gated review store, then community store. |
@@ -271,9 +271,9 @@ function pruneVersions(versions, activeVersionId, maxVersions = 5, retentionDays
 ### Role-Based Visibility Matrix
 
 | Persona | Access Type | Version History Visibility | Actions Allowed |
-| :--- | :--- | :--- | :--- |
-| Builder (Owner) | Master Account | Full access to all versions | Create new revision, switch active version, download 3D and 2D assets, toggle client visibility. |
-| Client (Review Mode) | `?review=TOKEN` | Conditional (`clientCanViewVersions`) | If toggle is enabled by builder: browse past versions, view historical comments, switch versions. If disabled: sees only the active version. |
+| --- | --- | --- | --- |
+| Builder (Owner) | Master Account | Full access to all versions | Create new revision, switch active version, download 3D and 2D assets, resolve comments. |
+| Client (Review Mode) | `?review=TOKEN` | Active version only (builder managed) | Frictionless guest review: views current active 3D render and floor plan, places review pins, resolves own feedback. No account needed. |
 | Community User | Public Feed | None (latest version only) | Views only current 3D render and floor plan. Versions array and reviews are completely stripped. |
 
 ### Version Asset Downloads

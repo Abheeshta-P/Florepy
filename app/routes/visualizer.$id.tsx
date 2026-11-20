@@ -102,8 +102,6 @@ function VisualizerId() {
   const [revisionFileBase64, setRevisionFileBase64] = useState<string | null>(null);
   const [isCreatingRevision, setIsCreatingRevision] = useState(false);
   const [revisionError, setRevisionError] = useState<string | null>(null);
-  const [allowClientVersions, setAllowClientVersions] = useState(false);
-  const [isSavingVersionSettings, setIsSavingVersionSettings] = useState(false);
   const [isResolvingAll, setIsResolvingAll] = useState(false);
 
   // Review interaction states
@@ -361,7 +359,6 @@ function VisualizerId() {
 
     setEnablePasscode(Boolean(project?.reviewPasscode));
     setPasscodeInput(project?.reviewPasscode || "");
-    setAllowClientVersions(Boolean(project?.clientCanViewVersions));
     setPasscodeToast(null);
     setShowShareModal(true);
 
@@ -395,25 +392,6 @@ function VisualizerId() {
           console.warn("Background share sync failed:", err);
         }
       })();
-    }
-  };
-
-  const handleToggleClientVersions = async (checked: boolean) => {
-    setAllowClientVersions(checked);
-    if (!project?.id || !isOwner) return;
-    try {
-      setIsSavingVersionSettings(true);
-      await updateProjectVersionSettings({
-        projectId: project.id,
-        clientCanViewVersions: checked,
-      });
-      setProject((prev) =>
-        prev ? { ...prev, clientCanViewVersions: checked } : prev,
-      );
-    } catch (err) {
-      console.error("Failed to update version visibility settings:", err);
-    } finally {
-      setIsSavingVersionSettings(false);
     }
   };
 
@@ -1011,12 +989,45 @@ function VisualizerId() {
           : null);
       const finalSource = revisionFileBase64;
 
+      let finalVersions: ProjectVersion[] =
+        (revisionData.versions as ProjectVersion[]) || project.versions || [];
+      const hasV1 = finalVersions.some(
+        (v: ProjectVersion) => v.versionNumber === 1,
+      );
+      if (!hasV1 && finalVersions.length > 0) {
+        const v2 =
+          finalVersions.find((v: ProjectVersion) => v.versionNumber === 2) ||
+          finalVersions[0];
+        const v1Timestamp =
+          Number(project.id) ||
+          (v2.timestamp ? v2.timestamp - 3600000 : Date.now() - 3600000);
+        const v1Reviews =
+          Array.isArray(project.reviews) &&
+          project.reviews.length > 0 &&
+          (!v2 || (v2.reviews?.length || 0) === 0)
+            ? project.reviews
+            : [];
+        const v1: ProjectVersion = {
+          id: `ver_${project.id}_v1`,
+          versionNumber: 1,
+          name: "Version 1",
+          sourceImage: `project/${project.id}/source.png`,
+          renderedImage: `project/${project.id}/rendered.png`,
+          timestamp: v1Timestamp,
+          createdAt: new Date(v1Timestamp).toISOString(),
+          reviews: v1Reviews,
+        };
+        finalVersions = [...finalVersions, v1].sort(
+          (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0),
+        );
+      }
+
       setProject((prev) =>
         prev
           ? {
               ...prev,
               activeVersionId: revisionData.activeVersionId,
-              versions: revisionData.versions || prev.versions,
+              versions: finalVersions,
               sourceImage: finalSource,
               renderedImage: finalRender,
               reviews: [], // Fresh comment thread for the new revision!
@@ -1141,10 +1152,45 @@ function VisualizerId() {
             setIsReviewLocked(true);
           }
         }
+        let versions = fetchedProject.versions;
+        if (Array.isArray(versions) && versions.length > 0) {
+          const hasV1 = versions.some((v) => v.versionNumber === 1);
+          if (!hasV1) {
+            const v2 =
+              versions.find((v) => v.versionNumber === 2) || versions[0];
+            const v1Timestamp =
+              Number(id) ||
+              (v2.timestamp ? v2.timestamp - 3600000 : Date.now() - 3600000);
+            const v1Source =
+              fetchedProject.sourcePath || `project/${id}/source.png`;
+            const v1Render =
+              fetchedProject.renderedPath || `project/${id}/rendered.png`;
+            const v1Reviews =
+              Array.isArray(fetchedProject.reviews) &&
+              fetchedProject.reviews.length > 0 &&
+              (!v2 || (v2.reviews?.length || 0) === 0)
+                ? fetchedProject.reviews
+                : [];
+            const v1: ProjectVersion = {
+              id: `ver_${id}_v1`,
+              versionNumber: 1,
+              name: "Version 1",
+              sourceImage: v1Source,
+              renderedImage: v1Render,
+              timestamp: v1Timestamp,
+              createdAt: new Date(v1Timestamp).toISOString(),
+              reviews: v1Reviews,
+            };
+            versions = [...versions, v1].sort(
+              (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0),
+            );
+          }
+        }
+
         const activeVer =
-          (fetchedProject.versions || []).find(
+          (versions || []).find(
             (v) => v.id === fetchedProject.activeVersionId,
-          ) || fetchedProject.versions?.[0];
+          ) || versions?.[0];
 
         let sourceUrl = activeVer?.sourceImage || fetchedProject.sourceImage;
         let renderUrl =
@@ -1163,14 +1209,12 @@ function VisualizerId() {
 
         const finalizedProject = {
           ...fetchedProject,
+          versions,
           sourceImage: sourceUrl,
           renderedImage: renderUrl,
           reviews: currentReviews,
         };
 
-        if (fetchedProject.clientCanViewVersions !== undefined) {
-          setAllowClientVersions(Boolean(fetchedProject.clientCanViewVersions));
-        }
 
         setProject(finalizedProject);
         setCurrentImage(renderUrl || null);
@@ -1262,7 +1306,7 @@ function VisualizerId() {
                   <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider">
                     Project
                   </p>
-                  {(isOwner || project?.clientCanViewVersions) &&
+                  {isOwner &&
                     project?.versions &&
                     project.versions.length > 0 && (
                       <div className="relative inline-block">
@@ -1365,11 +1409,6 @@ function VisualizerId() {
                                     <UploadCloud size={13} />
                                     <span>Upload New Revision</span>
                                   </span>
-                                  {hasUnresolvedReviews && (
-                                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-semibold">
-                                      {unresolvedReviews.length} to resolve
-                                    </span>
-                                  )}
                                 </button>
                               </div>
                             )}
@@ -1414,11 +1453,7 @@ function VisualizerId() {
                     variant="outline"
                     onClick={() => setShowNewRevisionModal(true)}
                     disabled={isProcessing}
-                    title={
-                      hasUnresolvedReviews
-                        ? `Resolve all ${unresolvedReviews.length} comments to create new revision`
-                        : "Upload updated floor plan for next revision iteration"
-                    }
+                    title="Upload updated floor plan for next revision iteration"
                     className={`h-8 sm:h-9 px-2.5 sm:px-3 text-[11px] sm:text-xs rounded-lg shadow-xs flex items-center justify-center font-medium ${
                       hasUnresolvedReviews
                         ? "text-zinc-700 bg-zinc-50 border-zinc-200"
@@ -1428,14 +1463,6 @@ function VisualizerId() {
                     <UploadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
                     <span className="hidden sm:inline">New Revision</span>
                     <span className="sm:hidden">Revision</span>
-                    {hasUnresolvedReviews && (
-                      <span
-                        className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-semibold"
-                        title={`${unresolvedReviews.length} unresolved comments`}
-                      >
-                        {unresolvedReviews.length}
-                      </span>
-                    )}
                   </Button>
                 )}
                 <div className="relative inline-block">
@@ -2106,38 +2133,7 @@ function VisualizerId() {
                 )}
               </div>
 
-              {/* Version History Settings for Client */}
-              <div className="pt-2 border-t border-zinc-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label
-                      htmlFor="versions-client-toggle"
-                      className="text-xs font-medium text-zinc-800 cursor-pointer block"
-                    >
-                      Allow Client to Browse Revision History
-                    </label>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">
-                      Permits clients to view earlier versions and verify addressed feedback.
-                    </p>
-                  </div>
-                  <input
-                    id="versions-client-toggle"
-                    type="checkbox"
-                    checked={allowClientVersions}
-                    disabled={isSavingVersionSettings}
-                    onChange={(e) =>
-                      void handleToggleClientVersions(e.target.checked)
-                    }
-                    className="rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer ml-3 shrink-0"
-                  />
-                </div>
-                <p className="text-[10px] text-zinc-400 flex items-center gap-1 pt-0.5">
-                  <Clock size={11} className="text-zinc-400 shrink-0" />
-                  <span>
-                    Retention cap: Keeps up to {project?.maxVersions || 5} versions for {project?.retentionDays || 30} days.
-                  </span>
-                </p>
-              </div>
+
             </div>
           )}
 
