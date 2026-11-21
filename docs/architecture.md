@@ -242,19 +242,36 @@ To prevent unbounded storage usage in Puter FS and KV, the system applies automa
 
 - Default Max Versions Cap: 5 versions per project (configurable up to 20).
 - Default Retention Period: 30 days (configurable project setting).
-- Baseline Invariant: Version 1 (the initial original baseline layout) is permanently protected and never pruned.
-- Pruning Algorithm: When versions exceed `maxVersions`, intermediate older drafts are pruned while keeping Version 1 and the newest $N-1$ revisions.
+- Baseline & Active Invariants: Version 1 (the initial original baseline layout) and the currently active/latest version are permanently protected.
+- In-Between Pruning: Intermediate drafts are auto-deleted if inactive for > 30 days (`retentionDays`), or pruned to fit within `maxVersions`.
 
 ```javascript
-function pruneVersions(versions, maxVersions = DEFAULT_MAX_VERSIONS) {
-  if (!Array.isArray(versions) || versions.length <= maxVersions) return versions || [];
+function pruneVersions(
+  versions,
+  activeVersionId,
+  maxVersions = DEFAULT_MAX_VERSIONS,
+  retentionDays = DEFAULT_RETENTION_DAYS
+) {
+  if (!Array.isArray(versions) || versions.length === 0) return versions || [];
 
+  const now = Date.now();
+  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
   const sorted = [...versions].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
-  const v1 = sorted.find((v) => v.versionNumber === 1);
-  const nonV1 = sorted.filter((v) => v.versionNumber !== 1);
-  const keptRecent = nonV1.slice(0, v1 ? maxVersions - 1 : maxVersions);
 
-  return (v1 ? [...keptRecent, v1] : keptRecent).sort(
+  const v1 = sorted.find((v) => v.versionNumber === 1);
+  const latest = sorted[0];
+  const active = sorted.find((v) => v.id === activeVersionId) || latest;
+
+  const intermediates = sorted.filter(
+    (v) => v.versionNumber !== 1 && v.id !== active.id && v.id !== latest.id
+  );
+
+  const activeIntermediates = intermediates.filter((v) => now - (v.timestamp || 0) <= maxAgeMs);
+  const protectedVersions = Array.from(new Set([v1, latest, active].filter(Boolean)));
+  const allowedIntermediates = Math.max(0, maxVersions - protectedVersions.length);
+  const cappedIntermediates = activeIntermediates.slice(0, allowedIntermediates);
+
+  return Array.from(new Set([...protectedVersions, ...cappedIntermediates])).sort(
     (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0)
   );
 }

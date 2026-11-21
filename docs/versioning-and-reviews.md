@@ -111,13 +111,16 @@ flowchart TD
 
 
 
-## 4. Automated Version Pruning
+## 4. Automated Version Pruning and Retention
 
-Pruning enforces storage constraints by auto-deleting older intermediate revisions once the version count exceeds `maxVersions`.
+Pruning enforces storage constraints and clean project history by auto-deleting intermediate revisions according to two rules:
+1. **Inactivity Expiration**: In-between intermediate revisions that have been inactive for more than `retentionDays` (default 30 days) are auto-deleted.
+2. **Capacity Capping**: If the number of surviving revisions still exceeds `maxVersions` (default: 5), the oldest intermediate revisions are pruned to maintain the cap.
 
-### Retention Invariant: Version 1 Protection
+### Retention Invariant: Version 1 and Active Version Protection
 
-Version 1 is the initial baseline layout of the project and is **never auto-deleted**.
+- **Version 1** is the initial baseline layout of the project and is **never auto-deleted**.
+- **Active Working Version** and **Latest Version** are currently worked on and are **never auto-deleted**.
 
 Why Version 1 is permanently retained:
 1. **Design Baseline Comparison**: In architectural visualization, users frequently compare advanced iterations (e.g. Version 6) back to the original starting layout.
@@ -126,27 +129,48 @@ Why Version 1 is permanently retained:
 ### Pruning Algorithm
 
 ```javascript
-function pruneVersions(versions, maxVersions = DEFAULT_MAX_VERSIONS) {
-  if (!Array.isArray(versions) || versions.length <= maxVersions) return versions || [];
+function pruneVersions(
+  versions,
+  activeVersionId,
+  maxVersions = DEFAULT_MAX_VERSIONS,
+  retentionDays = DEFAULT_RETENTION_DAYS
+) {
+  if (!Array.isArray(versions) || versions.length === 0) return versions || [];
 
-  // Sort by versionNumber descending (newest first)
-  const sorted = [...versions].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
+  const now = Date.now();
+  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
 
-  // Retain Version 1 baseline and newest versions up to maxVersions
+  // Sort descending: newest first
+  const sorted = [...versions].sort(
+    (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0)
+  );
+
   const v1 = sorted.find((v) => v.versionNumber === 1);
-  const nonV1 = sorted.filter((v) => v.versionNumber !== 1);
-  const keptRecent = nonV1.slice(0, v1 ? maxVersions - 1 : maxVersions);
+  const latest = sorted[0];
+  const active = sorted.find((v) => v.id === activeVersionId) || latest;
 
-  return (v1 ? [...keptRecent, v1] : keptRecent).sort(
+  // In-between versions (neither Version 1, nor latest, nor currently active)
+  const intermediates = sorted.filter(
+    (v) => v.versionNumber !== 1 && v.id !== active.id && v.id !== latest.id
+  );
+
+  // 1. Auto-delete intermediate versions that have been inactive for > retentionDays
+  const activeIntermediates = intermediates.filter(
+    (v) => now - (v.timestamp || 0) <= maxAgeMs
+  );
+
+  // 2. Identify all protected versions (unique set of V1, latest, active)
+  const protectedVersions = Array.from(new Set([v1, latest, active].filter(Boolean)));
+
+  // 3. Cap total versions to maxVersions by selecting the newest surviving intermediate versions
+  const allowedIntermediates = Math.max(0, maxVersions - protectedVersions.length);
+  const cappedIntermediates = activeIntermediates.slice(0, allowedIntermediates);
+
+  return Array.from(new Set([...protectedVersions, ...cappedIntermediates])).sort(
     (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0)
   );
 }
 ```
-
-- When `maxVersions = 5` and a 6th version is created:
-  - Version 1 is retained.
-  - Versions 6, 5, 4, 3 are retained.
-  - Version 2 (the oldest intermediate draft) is dropped.
 
 
 
