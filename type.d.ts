@@ -54,10 +54,9 @@ interface DesignItem {
   reviewPasscode?: string | null;
   reviews?: ProjectReview[];
 
-  // Step 2: Versioning System
+  // Versioning System
   activeVersionId?: string | null;
   versions?: ProjectVersion[];
-  clientCanViewVersions?: boolean;
   maxVersions?: number;
   retentionDays?: number;
 }

@@ -281,9 +281,13 @@ function VisualizerId() {
   const hasUnresolvedReviews = unresolvedReviews.length > 0;
 
   // Review permissions:
-  // "Add Review" is strictly for clients viewing the shared review link.
+  // "Add Review" is strictly for clients viewing the shared review link on the latest version.
   // The owner is the creator/builder and views/resolves reviews, without adding reviews to their own project.
-  const canAddReview = isClientReviewMode;
+  const isLatestVersion =
+    !project?.versions ||
+    project.versions.length === 0 ||
+    project.activeVersionId === project.versions[0].id;
+  const canAddReview = isClientReviewMode && isLatestVersion;
 
   // Reviews pins are ONLY visible once the picture is fully loaded, not locked, and not processing
   const areReviewsVisible = Boolean(
@@ -567,9 +571,25 @@ function VisualizerId() {
     return false;
   };
 
+  // Synchronizes review changes across both the root project reviews list and the active version's reviews
+  const updateProjectReviewsState = (updatedReviews: ProjectReview[]) => {
+    setProject((prev) => {
+      if (!prev) return prev;
+      const targetVerId = prev.activeVersionId || prev.versions?.[0]?.id;
+      const updatedVersions = (prev.versions || []).map((ver) =>
+        ver.id === targetVerId ? { ...ver, reviews: updatedReviews } : ver,
+      );
+      return {
+        ...prev,
+        reviews: updatedReviews,
+        versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
+      };
+    });
+  };
+
   const handleAddReview = async () => {
     const author = (isSignedIn && userName ? userName : reviewerName).trim();
-    if (!project?.id || !pendingReviewPin || !reviewText.trim() || !author)
+    if (!project?.id || !canAddReview || !pendingReviewPin || !reviewText.trim() || !author)
       return;
 
     try {
@@ -585,12 +605,6 @@ function VisualizerId() {
       };
 
       const updatedReviews = [...(project.reviews || []), newReview];
-      const updatedVersions = (project.versions || []).map((ver) => {
-        if (ver.id === (project.activeVersionId || ver.id)) {
-          return { ...ver, reviews: [...(ver.reviews || []), newReview] };
-        }
-        return ver;
-      });
 
       if (typeof window !== "undefined") {
         localStorage.setItem("florepy_reviewer_name", author);
@@ -604,15 +618,7 @@ function VisualizerId() {
         } catch {}
       }
 
-      setProject((prev) =>
-        prev
-          ? {
-              ...prev,
-              reviews: updatedReviews,
-              versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
-            }
-          : prev,
-      );
+      updateProjectReviewsState(updatedReviews);
       setPendingReviewPin(null);
       setReviewText("");
 
@@ -642,27 +648,7 @@ function VisualizerId() {
     const updatedReviews = (project.reviews || []).map((r) =>
       r.id === reviewId ? { ...r, resolved: newResolved } : r,
     );
-    const updatedVersions = (project.versions || []).map((ver) => {
-      if (ver.id === (project.activeVersionId || ver.id)) {
-        return {
-          ...ver,
-          reviews: (ver.reviews || []).map((r) =>
-            r.id === reviewId ? { ...r, resolved: newResolved } : r,
-          ),
-        };
-      }
-      return ver;
-    });
-
-    setProject((prev) =>
-      prev
-        ? {
-            ...prev,
-            reviews: updatedReviews,
-            versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
-          }
-        : prev,
-    );
+    updateProjectReviewsState(updatedReviews);
 
     await updateProjectReviews({
       projectId: project.id,
@@ -682,29 +668,7 @@ function VisualizerId() {
         ...r,
         resolved: true,
       }));
-      const updatedVersions = (project.versions || []).map((ver) => {
-        if (ver.id === (project.activeVersionId || ver.id)) {
-          return {
-            ...ver,
-            reviews: (ver.reviews || []).map((r) => ({
-              ...r,
-              resolved: true,
-            })),
-          };
-        }
-        return ver;
-      });
-
-      setProject((prev) =>
-        prev
-          ? {
-              ...prev,
-              reviews: updatedReviews,
-              versions:
-                updatedVersions.length > 0 ? updatedVersions : prev.versions,
-            }
-          : prev,
-      );
+      updateProjectReviewsState(updatedReviews);
 
       await updateProjectReviews({
         projectId: project.id,
@@ -731,27 +695,7 @@ function VisualizerId() {
       const updatedReviews = (project.reviews || []).map((r) =>
         r.id === reviewId ? { ...r, text: updatedText } : r,
       );
-      const updatedVersions = (project.versions || []).map((ver) => {
-        if (ver.id === (project.activeVersionId || ver.id)) {
-          return {
-            ...ver,
-            reviews: (ver.reviews || []).map((r) =>
-              r.id === reviewId ? { ...r, text: updatedText } : r,
-            ),
-          };
-        }
-        return ver;
-      });
-
-      setProject((prev) =>
-        prev
-          ? {
-              ...prev,
-              reviews: updatedReviews,
-              versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
-            }
-          : prev,
-      );
+      updateProjectReviewsState(updatedReviews);
       setEditingReviewId(null);
       setEditingReviewText("");
 
@@ -778,25 +722,7 @@ function VisualizerId() {
     const updatedReviews = (project.reviews || []).filter(
       (r) => r.id !== reviewId,
     );
-    const updatedVersions = (project.versions || []).map((ver) => {
-      if (ver.id === (project.activeVersionId || ver.id)) {
-        return {
-          ...ver,
-          reviews: (ver.reviews || []).filter((r) => r.id !== reviewId),
-        };
-      }
-      return ver;
-    });
-
-    setProject((prev) =>
-      prev
-        ? {
-            ...prev,
-            reviews: updatedReviews,
-            versions: updatedVersions.length > 0 ? updatedVersions : prev.versions,
-          }
-        : prev,
-    );
+    updateProjectReviewsState(updatedReviews);
     if (activeReviewId === reviewId) setActiveReviewId(null);
 
     await updateProjectReviews({
@@ -808,6 +734,7 @@ function VisualizerId() {
     });
   };
 
+  // Switches the builder's active working view to a previous or future version
   const handleSelectVersion = async (versionId: string) => {
     if (!project?.id || versionId === project.activeVersionId) {
       setShowVersionDropdown(false);
@@ -989,38 +916,8 @@ function VisualizerId() {
           : null);
       const finalSource = revisionFileBase64;
 
-      let finalVersions: ProjectVersion[] =
+      const finalVersions: ProjectVersion[] =
         (revisionData.versions as ProjectVersion[]) || project.versions || [];
-      const hasV1 = finalVersions.some(
-        (v: ProjectVersion) => v.versionNumber === 1,
-      );
-      if (!hasV1 && finalVersions.length > 0) {
-        const v2 =
-          finalVersions.find((v: ProjectVersion) => v.versionNumber === 2) ||
-          finalVersions[0];
-        const v1Timestamp =
-          Number(project.id) ||
-          (v2.timestamp ? v2.timestamp - 3600000 : Date.now() - 3600000);
-        const v1Reviews =
-          Array.isArray(project.reviews) &&
-          project.reviews.length > 0 &&
-          (!v2 || (v2.reviews?.length || 0) === 0)
-            ? project.reviews
-            : [];
-        const v1: ProjectVersion = {
-          id: `ver_${project.id}_v1`,
-          versionNumber: 1,
-          name: "Version 1",
-          sourceImage: `project/${project.id}/source.png`,
-          renderedImage: `project/${project.id}/rendered.png`,
-          timestamp: v1Timestamp,
-          createdAt: new Date(v1Timestamp).toISOString(),
-          reviews: v1Reviews,
-        };
-        finalVersions = [...finalVersions, v1].sort(
-          (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0),
-        );
-      }
 
       setProject((prev) =>
         prev
@@ -1152,46 +1049,15 @@ function VisualizerId() {
             setIsReviewLocked(true);
           }
         }
-        let versions = fetchedProject.versions;
-        if (Array.isArray(versions) && versions.length > 0) {
-          const hasV1 = versions.some((v) => v.versionNumber === 1);
-          if (!hasV1) {
-            const v2 =
-              versions.find((v) => v.versionNumber === 2) || versions[0];
-            const v1Timestamp =
-              Number(id) ||
-              (v2.timestamp ? v2.timestamp - 3600000 : Date.now() - 3600000);
-            const v1Source =
-              fetchedProject.sourcePath || `project/${id}/source.png`;
-            const v1Render =
-              fetchedProject.renderedPath || `project/${id}/rendered.png`;
-            const v1Reviews =
-              Array.isArray(fetchedProject.reviews) &&
-              fetchedProject.reviews.length > 0 &&
-              (!v2 || (v2.reviews?.length || 0) === 0)
-                ? fetchedProject.reviews
-                : [];
-            const v1: ProjectVersion = {
-              id: `ver_${id}_v1`,
-              versionNumber: 1,
-              name: "Version 1",
-              sourceImage: v1Source,
-              renderedImage: v1Render,
-              timestamp: v1Timestamp,
-              createdAt: new Date(v1Timestamp).toISOString(),
-              reviews: v1Reviews,
-            };
-            versions = [...versions, v1].sort(
-              (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0),
-            );
-          }
-        }
+        // Resolve active version assets and comments (builder views activeVersionId, client review mode defaults to latest)
+        const versions = fetchedProject.versions || [];
 
         const activeVer =
           (versions || []).find(
             (v) => v.id === fetchedProject.activeVersionId,
           ) || versions?.[0];
 
+        // Note: for backward compatibility with unversioned legacy projects, fallback to project root assets and reviews
         let sourceUrl = activeVer?.sourceImage || fetchedProject.sourceImage;
         let renderUrl =
           activeVer?.renderedImage !== undefined

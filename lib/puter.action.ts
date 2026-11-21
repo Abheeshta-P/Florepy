@@ -807,8 +807,8 @@ export const createProjectRevision = async ({
 };
 
 /**
- * Switches the active version of a project.
- * Works for owner and optionally for client (if clientCanViewVersions is enabled).
+ * Switches the active working version of a project for the builder.
+ * Updates the floor plan and 3D render display to match the chosen historical version.
  */
 export const switchProjectVersion = async ({
   projectId,
@@ -851,16 +851,15 @@ export const switchProjectVersion = async ({
 };
 
 /**
- * Updates versioning settings for a project (client visibility, max cap, retention days).
+ * Updates versioning settings for a project (maximum version cap and retention period).
+ * Automatically triggers version pruning if maxVersions is reduced below current version count.
  */
 export const updateProjectVersionSettings = async ({
   projectId,
-  clientCanViewVersions,
   maxVersions,
   retentionDays,
 }: {
   projectId: string;
-  clientCanViewVersions?: boolean;
   maxVersions?: number;
   retentionDays?: number;
 }): Promise<boolean> => {
@@ -873,7 +872,6 @@ export const updateProjectVersionSettings = async ({
       body: JSON.stringify({
         projectId,
         action: "settings",
-        clientCanViewVersions,
         maxVersions,
         retentionDays,
       }),

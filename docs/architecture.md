@@ -236,44 +236,38 @@ interface ProjectVersion {
 }
 ```
 
-### Version Capping and Till-Date Retention Pruning
-To prevent unbounded storage usage in Puter FS and KV, the system applies automated pruning on every revision save and project fetch:
-- Default Max Versions Cap: 5 versions per project.
-- Default Retention Period: 30 days.
-- Pruning Rules:
-  1. Active Version Protection: The currently active version (`activeVersionId`) is always protected and never pruned.
-  2. Fallback Protection: At least one version is always retained.
-  3. Expiration Pruning: Versions older than `now - (retentionDays * 86400000)` are expired, except the active version.
-  4. Cap Overflow Pruning: If surviving versions exceed `maxVersions`, the oldest non-active versions are pruned first.
+### Version Capping and Automated Retention Pruning
+
+To prevent unbounded storage usage in Puter FS and KV, the system applies automated pruning strictly inside `POST /api/projects/version` during revision creation and retention settings adjustments.
+
+- Default Max Versions Cap: 5 versions per project (configurable up to 20).
+- Default Retention Period: 30 days (configurable project setting).
+- Baseline Invariant: Version 1 (the initial original baseline layout) is permanently protected and never pruned.
+- Pruning Algorithm: When versions exceed `maxVersions`, intermediate older drafts are pruned while keeping Version 1 and the newest $N-1$ revisions.
 
 ```javascript
-function pruneVersions(versions, activeVersionId, maxVersions = 5, retentionDays = 30) {
-  if (!Array.isArray(versions) || versions.length === 0) return [];
-  const now = Date.now();
-  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
-  const sorted = [...versions].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+function pruneVersions(versions, maxVersions = DEFAULT_MAX_VERSIONS) {
+  if (!Array.isArray(versions) || versions.length <= maxVersions) return versions || [];
 
-  const withinRetention = sorted.filter((v, idx) => {
-    if (v.id === activeVersionId || idx === 0) return true;
-    return now - (v.timestamp || 0) <= maxAgeMs;
-  });
+  const sorted = [...versions].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
+  const v1 = sorted.find((v) => v.versionNumber === 1);
+  const nonV1 = sorted.filter((v) => v.versionNumber !== 1);
+  const keptRecent = nonV1.slice(0, v1 ? maxVersions - 1 : maxVersions);
 
-  if (withinRetention.length <= maxVersions) return withinRetention;
-
-  const active = withinRetention.find((v) => v.id === activeVersionId) || withinRetention[0];
-  const others = withinRetention.filter((v) => v.id !== active.id);
-  const cappedOthers = others.slice(0, maxVersions - 1);
-
-  return [active, ...cappedOthers].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  return (v1 ? [...keptRecent, v1] : keptRecent).sort(
+    (a, b) => (b.versionNumber || 0) - (a.versionNumber || 0)
+  );
 }
 ```
+
+For detailed documentation of versioning fields, data storage differences (`targetVer.reviews` vs `reviewRecord.reviews`), and permission models, see [docs/versioning-and-reviews.md](file:///D:/pro/Florepy/docs/versioning-and-reviews.md).
 
 ### Role-Based Visibility Matrix
 
 | Persona | Access Type | Version History Visibility | Actions Allowed |
 | --- | --- | --- | --- |
 | Builder (Owner) | Master Account | Full access to all versions | Create new revision, switch active version, download 3D and 2D assets, resolve comments. |
-| Client (Review Mode) | `?review=TOKEN` | Active version only (builder managed) | Frictionless guest review: views current active 3D render and floor plan, places review pins, resolves own feedback. No account needed. |
+| Client (Review Mode) | `?review=TOKEN` | Latest version only (`versions[0]`) | Frictionless guest review: views latest 3D render and floor plan, places review pins strictly on latest revision, resolves own feedback. |
 | Community User | Public Feed | None (latest version only) | Views only current 3D render and floor plan. Versions array and reviews are completely stripped. |
 
 ### Version Asset Downloads
